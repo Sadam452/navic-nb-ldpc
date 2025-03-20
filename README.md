@@ -32,33 +32,36 @@ Frame Error Rate (FER) and Bit Error Rate (BER) and average number of iterations
 ## Simulation results
 
 > Monte-Carlo simulation of Non-Binary LDPC decoder
-> > 
+>
 > Simulation parameters:
-> 
->          NbMonteCarlo     : 2000
->          NbIterMax        : 10
->          FileMatrix       : ./matrices/KN/N576_K480_GF64.txt
->          Eb/No (dB)       : 3.5
->          n_vc             : 20
->		   n_cv				: 20
->          Offset           : 0.3
->          NbOper           : 25
-> 
->  Normal alist format is used!
-> LDPC code parameters:
->          N      :96
->          K      :80
->          M      :16
->          CR     :0.833333
->          GF     :64
->          logGF  :6
-> 
->          Note             : FB30
-> Simulation started at time: Wed Jan 08 17:34:02 2020
-> 
-> <0> FER= 40 / 751 = 0.053262 BER= 520 / x = 0.001443  avr_it=2.58
->  results are printed in file ./data/results_N96_CR0.83_GF64_IT10_Offset0.3_nm20_FB30.txt
-> 
->  results printed
-> 
-> Simulation complete at time: Wed Jan 08 17:34:08 2020
+
+>         NbMonteCarlo     : 2000
+>         NbIterMax        : 10
+>         FileMatrix       : ./matrices/KN/N92_K46_GF64_navic.txt
+>         Eb/No (dB)       : 3.5
+>         n_vc            : 20
+>         n_cv            : 20
+>         Offset           : 0.3
+>         NbOper           : 25
+>Load code  ...  
+> Normal alist format is used! 
+>LDPC code parameters: 
+>         N      :92 
+>         K      :46 
+>         M      :46 
+>         CR     :0.5 
+>         GF     :64 
+>         logGF  :6
+> OK 
+> Load table ...OK 
+> Allocate decoder ... OK 
+> Gaussian Elimination ...  OK 
+
+>         Note             : GF64_CCSK
+>Simulation started at time: Thu Mar 20 16:03:12 2025
+ 
+><0> FER= 0 / 2001 = 0.000000 BER= 0 / x = 0.000000  avr_it=1.83 
+> results are printed in file ./data/N92_GF64_nm20_GF64_CCSK.txt 
+ 
+>Simulation complete at time: Thu Mar 20 16:03:15 2025
+>execution time:3.00

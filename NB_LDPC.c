@@ -238,15 +238,15 @@ int main(int argc, char * argv[])
         /* function in tools.c*/
         RandomBinaryGenerator (code.N, code.M, code.GF, code.logGF, KBIN, KSYMB, table.BINGF,&Idum);
         //print the information bits
-        for (k=0; k<code.K; k++)
-        {
-            for (g=0; g<code.logGF; g++)
-            {
-                printf("%d",KBIN[k][g]);
-            }
-            // printf(" -> %d \n",KSYMB[k]);
-        }
-        printf("\n");
+        // for (k=0; k<code.K; k++)
+        // {
+        //     for (g=0; g<code.logGF; g++)
+        //     {
+        //         printf("%d",KBIN[k][g]);
+        //     }
+        //     // printf(" -> %d \n",KSYMB[k]);
+        // }
+        // printf("\n");
 
         /* Encode the information bits KBIN to a (non binary) codeword NSYMB */
         /*tools.c*/
@@ -432,7 +432,7 @@ int main(int argc, char * argv[])
         fprintf(opfile," \t BER= %d / x = \t %f  avr_it= \t %.2f \t time: %s",total_errors, (double)total_errors/(double)(nb*code.K*code.logGF),(double)(sum_it)/nb , c_time_string );
     }
     fclose(opfile);
-    printf(" \n results printed \n ");
+    // printf(" \n results printed \n ");
 
 
     printf("\n");
