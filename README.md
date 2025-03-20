@@ -10,9 +10,9 @@ You can use this code to simulate NB-LDPC matrices using the Extented-Min Sum (E
  1.		NbMonteCarlo     : # simulated frames
  1.		NbIterMax        : # of maximum decoding iteration
  1.		FileMatrix       : File name of the parity-check matrix
- 1.		EbN              : Eb/No (dB)
+ 1.		snrValue         : snrValue
  1.		n_vc             : size of truncated messages from Variable to Check
- 1.		n_cv	            : size of truncated messages from Check to Variable
+ 1.		n_cv	         : size of truncated messages from Check to Variable
  1.		Offset           : offset correction factor (0.4 -- 1)
  1.		NbOper           : Maximum number of operations for sorting
  
@@ -34,21 +34,21 @@ Frame Error Rate (FER) and Bit Error Rate (BER) and average number of iterations
 > Monte-Carlo simulation of Non-Binary LDPC decoder
 >
 > Simulation parameters:
-
->         NbMonteCarlo     : 2000
+>
+>        NbMonteCarlo     : 2000
 >         NbIterMax        : 10
->         FileMatrix       : ./matrices/KN/N92_K46_GF64_navic.txt
+ >        FileMatrix       : ./matrices/KN/N1200_K600_GF64_Navic.txt
 >         Eb/No (dB)       : 3.5
 >         n_vc            : 20
 >         n_cv            : 20
 >         Offset           : 0.3
 >         NbOper           : 25
->Load code  ...  
+> Load code  ...  
 > Normal alist format is used! 
->LDPC code parameters: 
->         N      :92 
->         K      :46 
->         M      :46 
+> LDPC code parameters: 
+>         N      :200 
+>         K      :100 
+>         M      :100 
 >         CR     :0.5 
 >         GF     :64 
 >         logGF  :6
@@ -56,12 +56,12 @@ Frame Error Rate (FER) and Bit Error Rate (BER) and average number of iterations
 > Load table ...OK 
 > Allocate decoder ... OK 
 > Gaussian Elimination ...  OK 
-
+>
 >         Note             : GF64_CCSK
->Simulation started at time: Thu Mar 20 16:03:12 2025
+> Simulation started at time: Fri Mar 21 01:53:13 2025
  
-><0> FER= 0 / 2001 = 0.000000 BER= 0 / x = 0.000000  avr_it=1.83 
-> results are printed in file ./data/N92_GF64_nm20_GF64_CCSK.txt 
- 
->Simulation complete at time: Thu Mar 20 16:03:15 2025
->execution time:3.00
+> <0> FER= 0 / 2001 = 0.000000 BER= 0 / x = 0.000000  avr_it=2.02 
+> results are printed in file ./data/N200_GF64_nm20_GF64_CCSK.txt 
+
+> Simulation complete at time: Fri Mar 21 01:53:21 2025
+> execution time:8.00

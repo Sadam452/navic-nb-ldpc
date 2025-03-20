@@ -1,19 +1,18 @@
 /*!
  * \file NB_LDPC.c
  * \brief Non-binary LDPC reduced complexity decoder with horizontal scheduling
- * \author C.Marchand, A. Al-Ghouwahel, Oussama Abassi, L. Conde-Canencia, A. abdmoulah, E. Boutillon
+ * \author Sadam Hussein
  * \copyright BSD copyright
  * \date 03/03/2015
  * \details
-
-   Extended Min-Sum Decoder
-  Horizontal Scheduling
-    Layered decoder
-    syndrome based architecture
-
+ 
+   This implements an Extended Min-Sum Decoder for Non-Binary LDPC codes.
+   The decoder uses horizontal scheduling with a layered architecture
+   and syndrome-based decoding approach.
+   
+   The algorithm provides an efficient reduced-complexity implementation
+   for decoding non-binary LDPC codes in Galois Fields.
  */
-
-
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -26,434 +25,345 @@
 /// preprocessing directives
 //#define CCSK // use of Code-shift keying modulation
 
-
-
 /*!
  * \fn int main(int argc, char * argv[])
- * \brief main program
-
- * Inputs
+ * \brief Main program for simulating non-binary LDPC codes
  *
- *		NbMonteCarlo     : # simulated frames
- *		NbIterMax        : # of maximum decoding iteration
- *		FileMatrix       : File name of the parity-check matrix
- *		EbN              : Eb/No (dB)
- *		n_vc             : size of truncated messages from Variable to Check
- *      n_cv             : size of truncated messages from Check to Variable
- *		Offset           : offset correction factor (0.4 -- 1)
- *		NbOper           : Maximum number of operations for sorting
- * Output
- *              Frame Error Rate for the given simulation parameters
- * Input File : 'FileMatrix' is an ASCII file with the parity-check matrix description in aList format.
- * Output File : in ./data file
+ * This program simulates the performance of non-binary LDPC codes using
+ * a reduced complexity decoder. It takes various parameters as input and
+ * calculates performance metrics like Frame Error Rate (FER) and Bit Error Rate (BER).
  *
+ * Inputs:
+ *    NbMonteCarlo     : Number of frames to simulate
+ *    NbIterMax        : Maximum number of decoding iterations
+ *    FileMatrix       : Filename containing the parity-check matrix
+ *    EbN              : Signal-to-noise ratio in dB (Eb/No)
+ *    n_vc             : Size of truncated messages from Variable to Check nodes
+ *    n_cv             : Size of truncated messages from Check to Variable nodes
+ *    Offset           : Offset correction factor (typically 0.4 -- 1)
+ *    NbOper           : Maximum number of operations for sorting
  *
- under linux
- compile using make
- then Run the executable with the following parameters
-
-./essai 2000 10 ./matrices/KN/N576_K480_GF64.txt 3.5 10 20 0.3 25
-
-giving
-
-<0> FER = 40/751 = 0.053262 BER = 520 / x = 0.001443 avr_it = 2.58
-
-*/
+ * Output:
+ *    Frame Error Rate and other performance metrics for the given parameters
+ *
+ * Input File: 'FileMatrix' should be an ASCII file with parity-check matrix in aList format.
+ * Output File: Results are saved in the ./data directory
+ *
+ * Usage example (Linux):
+ *    compile using make
+ *    ./essai 2000 10 ./matrices/KN/N576_K480_GF64.txt 3.5 10 20 0.3 25
+ *
+ * Example output:
+ *    <0> FER = 40/751 = 0.053262 BER = 520 / x = 0.001443 avr_it = 2.58
+ */
 int main(int argc, char * argv[])
 {
-    int 		k,l,n,iter,i,g;
-    int 		**KBIN,*KSYMB,**NBIN,*NSYMB;
-    int 		*decide,*CodeWord;
-    int 		nb,NbIterMax;
-    float 		EbN;
-    int 		NbOper,NbMonteCarlo;
-    float 	offset;
-    char *FileName,*FileMatrix,*name;
-    int synd=0, nbErrors, nbErroneousFrames = 0, nbUndetectedErrors = 0;
-    int total_errors =0;
+    int         k, l, n, iteration, i, g;
+    int         **infoBits, *infoSymbols, **codeBits, *codeSymbols;
+    int         *decodedSymbols, *codeWord;
+    int         frameCount, maxIterations;
+    float       snrValue;
+    int         maxOperations, numMonteCarloTrials;
+    float       offsetFactor;
+    char        *outputFileName, *matrixFileName, *simulationName;
+    int         syndrom = 0, numBitErrors, numFrameErrors = 0, numUndetectedErrors = 0;
+    int         totalBitErrors = 0;
 
     code_t code;
     table_t table;
     decoder_t decoder;
 
-    int node;
+    int checkNode;
 
-    int Idum=-1; // initialization of random generator
+    int randomSeed = -1; // initialization of random generator
     srand(2);
 
     /*
      * Command line arguments
      */
-    if (argc < 8)
+    //  printf("argc: %d\n", argc);
+    if (argc < 9)
     {
-        printf("File:\n %s\n ",argv[0]);
-        printf(usage_txt);
+        printf("File:\n %s\n ", argv[0]);
+        //printf usage_txt of type: static char usage_txt[]
+        printf("%s", usage_txt);
         return (EXIT_FAILURE);
     }
-    FileName 	= malloc(STR_MAXSIZE);
-    FileMatrix 	= malloc(STR_MAXSIZE);
-    name 		= malloc(STR_MAXSIZE);
+    outputFileName = malloc(STR_MAXSIZE);
+    matrixFileName = malloc(STR_MAXSIZE);
+    simulationName = malloc(STR_MAXSIZE);
 
-
-    NbMonteCarlo 		= atoi(argv[1]);
-    NbIterMax 		= atoi(argv[2]);
-    strcpy(FileMatrix,argv[3]);
-    EbN 			= atof(argv[4]);
-    decoder.n_vc 	= atoi(argv[5]);
-    decoder.n_cv 	= atoi(argv[6]);
-    offset  		= atof(argv[7]);
-    NbOper  		= atoi(argv[8]);
+    numMonteCarloTrials = atoi(argv[1]);
+    maxIterations       = atoi(argv[2]);
+    strcpy(matrixFileName, argv[3]);
+    snrValue            = atof(argv[4]);
+    decoder.n_vc        = atoi(argv[5]);
+    decoder.n_cv        = atoi(argv[6]);
+    offsetFactor        = atof(argv[7]);
+    maxOperations       = atoi(argv[8]);
+    
     printf(" Monte-Carlo simulation of Non-Binary LDPC decoder \n\n");
     printf("Simulation parameters:\n");
-    printf("\n\t NbMonteCarlo     : %d", NbMonteCarlo);
-    printf("\n\t NbIterMax        : %d", NbIterMax);
-    printf("\n\t FileMatrix       : %s", FileMatrix);
-    printf("\n\t Eb/No (dB)       : %g", EbN);
+    printf("\n\t NbMonteCarlo     : %d", numMonteCarloTrials);
+    printf("\n\t NbIterMax        : %d", maxIterations);
+    printf("\n\t FileMatrix       : %s", matrixFileName);
+    printf("\n\t snrValue       : %g", snrValue);
     printf("\n\t n_vc            : %d", decoder.n_vc);
     printf("\n\t n_cv            : %d", decoder.n_cv);
-    printf("\n\t Offset           : %g", offset);
-    printf("\n\t NbOper           : %d\n",NbOper);
+    printf("\n\t Offset           : %g", offsetFactor);
+    printf("\n\t NbOper           : %d\n", maxOperations);
+
+    //check if FileMatrix exists
+    FILE *file;
+    if ((file = fopen(matrixFileName, "r")) == NULL)
+    {
+        printf("File %s not found\n", matrixFileName);
+        return (EXIT_FAILURE);
+    }
+    fclose(file);
+
 
     printf("Load code  ... ");
-    LoadCode (FileMatrix, &code);
+    LoadCode(matrixFileName, &code);
     printf(" OK \n Load table ...");
-    LoadTables (&table, code.GF, code.logGF);
+    LoadTables(&table, code.GF, code.logGF);
     printf("OK \n Allocate decoder ... ");
-    AllocateDecoder (&code, &decoder);
+    AllocateDecoder(&code, &decoder);
     printf("OK \n Gaussian Elimination ... ");
-    GaussianElimination (&code, &table);
+    GaussianElimination(&code, &table);
     printf(" OK \n");
 
-
-// output results in a file
-    FILE *opfile;
-    char note[20]="GF64_CCSK";
-    printf("\n\t Note             : %s\n",note);
-    char file_name [60];
-    time_t start_time;
-    time_t end_time;
-    double exec_time;
-    char* c_time_string;
-
-    //printf("press space to start!");getchar();
+    // Output results to a file
+    FILE *resultFile;
+    char note[20] = "GF64_CCSK";
+    printf("\n\t Note             : %s\n", note);
+    char fileName[60];
+    time_t startTime;
+    time_t endTime;
+    double executionTime;
+    char* timeString;
 
     #ifdef CCSK
     // CCSK: build CCSK table
     csk_t csk;
-    csk.PNsize =code.GF;
-    //csk.PNsize = 64;
+    csk.PNsize = code.GF;
     printf("\n\t PN is generated using an LFSR \n");
     allocate_csk(&csk, csk.PNsize);
-    PNGenerator( &csk ); //generate a PN sequence for csk modulation
-    build_natural_csk_mapping(code.GF, &csk, table.BINGF ); //fills the csk_arr with shifted versions of PN sequence
-    //build_equidistant_csk_mapping(code.GF, &csk, table.BINGF);//optimized for 1024
-    //build_punctured_csk_mapping(code.GF,code.logGF, &csk, table.BINGF);
-    //build_CSK_map(&code, &csk); //construction of a mapping without PN sequence
-
-
-
-
-
-
-
-
-
-    //float chu_real[csk.PNsize];
-    //float chu_imag[csk.PNsize];
-    //CHU_Generator(chu_real,chu_imag,csk.PNsize);
-    //CHU_AM_Generator(chu_real,chu_imag,csk.PNsize);
-    //CHU_Generator_64apsk(chu_real,chu_imag,csk.PNsize);
-    //CHU_Generator_256apsk(chu_real,chu_imag,csk.PNsize);
-
-
-
-
-
-    csk.PNsize = 6;  // for "punctured" CCSK mapping
-
+    PNGenerator(&csk); // Generate a PN sequence for csk modulation
+    build_natural_csk_mapping(code.GF, &csk, table.BINGF); // Fills the csk_arr with shifted versions of PN sequence
+    csk.PNsize = 6;  // For "punctured" CCSK mapping
     #endif
 
+    sprintf(fileName, "./data/N%d_GF%d_nm%d_%s.txt", code.N, code.GF, decoder.n_cv, note);
 
-    sprintf (file_name,"./data/N%d_GF%d_nm%d_%s.txt",code.N,code.GF,decoder.n_cv,note);
-
-
-    start_time = time(NULL);
-    c_time_string = ctime(&start_time);
-    printf("Simulation started at time: %s \n", c_time_string);
-
+    startTime = time(NULL);
+    timeString = ctime(&startTime);
+    printf("Simulation started at time: %s \n", timeString);
 
     /*
-     * Memory  allocation
+     * Memory allocation
      */
-    NBIN=(int **)calloc(code.N,sizeof(int *));
-    for (n=0; n<code.N; n++)  	NBIN[n]=(int *)calloc(code.logGF,sizeof(int));
-    KBIN=(int **)calloc(code.K,sizeof(int *));
-    for (k=0; k<code.K; k++) 	KBIN[k]=(int *)calloc(code.logGF,sizeof(int));
+    codeBits = (int **)calloc(code.N, sizeof(int *));
+    for (n = 0; n < code.N; n++)  
+        codeBits[n] = (int *)calloc(code.logGF, sizeof(int));
+    
+    infoBits = (int **)calloc(code.K, sizeof(int *));
+    for (k = 0; k < code.K; k++) 
+        infoBits[k] = (int *)calloc(code.logGF, sizeof(int));
 
-    NSYMB=(int *)calloc(code.N,sizeof(int));
-    KSYMB=(int *)calloc(code.K,sizeof(int));
-    CodeWord=(int *)calloc(code.N,sizeof(int));
+    codeSymbols = (int *)calloc(code.N, sizeof(int));
+    infoSymbols = (int *)calloc(code.K, sizeof(int));
+    codeWord = (int *)calloc(code.N, sizeof(int));
+    decodedSymbols = (int *)calloc(code.N, sizeof(int));
 
-    decide=(int *)calloc(code.N,sizeof(int));
-
-
-
-    // check that dc is constant
-    int dc_min=100;
-    int dc_max=0;
-    for (node=0; node<code.M; node++) /* Loop for the M Check nodes */
+    // Check that check node degree (dc) is constant
+    int dcMin = 100;
+    int dcMax = 0;
+    for (checkNode = 0; checkNode < code.M; checkNode++)
     {
-        if (dc_max < code.rowDegree[node])
+        if (dcMax < code.rowDegree[checkNode])
         {
-            dc_max = code.rowDegree[node];
+            dcMax = code.rowDegree[checkNode];
         }
-        if (dc_min > code.rowDegree[node])
+        if (dcMin > code.rowDegree[checkNode])
         {
-            dc_min = code.rowDegree[node];
+            dcMin = code.rowDegree[checkNode];
         }
     }
-    if (dc_min != dc_max)
+    if (dcMin != dcMax)
     {
-        printf("d_c is not constant: dc_min= %d ; dc_max=%d !!!!!! \n", dc_min,dc_max);
+        printf("d_c is not constant: dc_min= %d ; dc_max=%d !!!!!! \n", dcMin, dcMax);
     }
 
+    int totalIterations;
+    softdata_t messageVtoC_temp[dcMax][code.GF];
+    softdata_t messageVtoC_temp2[dcMax][code.GF];
+    totalIterations = 0;
 
-    int sum_it;
-
-
-//    getchar();
-
-    softdata_t Mvc_temp[dc_max][code.GF];
-    softdata_t Mvc_temp2[dc_max][code.GF];
-    sum_it=0;
-
-
-
-
-    for (nb=1; nb<=NbMonteCarlo; nb++)
+    for (frameCount = 1; frameCount <= numMonteCarloTrials; frameCount++)
     {
-        /* Decoder re-initialization */
+        /* Generate uniformly distributed information bits */
+        RandomBinaryGenerator(code.N, code.M, code.GF, code.logGF, infoBits, infoSymbols, table.BINGF, &randomSeed);
 
-        /* Generate uniformly distributed information bits (KBIN)) */
-        /* function in tools.c*/
-        RandomBinaryGenerator (code.N, code.M, code.GF, code.logGF, KBIN, KSYMB, table.BINGF,&Idum);
-        //print the information bits
-        // for (k=0; k<code.K; k++)
-        // {
-        //     for (g=0; g<code.logGF; g++)
-        //     {
-        //         printf("%d",KBIN[k][g]);
-        //     }
-        //     // printf(" -> %d \n",KSYMB[k]);
-        // }
-        // printf("\n");
+        /* Encode the information bits to a (non binary) codeword */
+        Encoding(&code, &table, codeWord, codeBits, infoSymbols);
 
-        /* Encode the information bits KBIN to a (non binary) codeword NSYMB */
-        /*tools.c*/
-        Encoding (&code, &table, CodeWord, NBIN, KSYMB);
-
-        /* Noisy channel (AWGN)*/
+        /* Noisy channel (AWGN) */
         #ifdef CCSK
-        // printf("CCSK Noise Added.\n");
-        ModelChannel_AWGN_BPSK_CSK (&csk,&code, &decoder, &table, CodeWord, EbN,&Idum);
-        //ModelChannel_CHU_CSK(chu_real,chu_imag, &csk,&code, &decoder, NBIN, EbN, &Idum);
-
-        //ModelChannel_AWGN_16_CSK (&csk,&code, &decoder, NBIN, EbN,&Idum);
-        //ModelChannel_AWGN_64_CSK (&csk,&code, &decoder, NBIN, EbN,&Idum);
-        //ModelChannel_AWGN_64_8CSK(&csk,&code, &decoder, NBIN, EbN,&Idum);
-        //ModelChannel_AWGN_256_CSK (&csk,&code, &decoder, NBIN, EbN,&Idum);
-        //ModelChannel_AWGN_64APSK_CSK256(&csk,&code, &decoder, NBIN, EbN, &Idum);
+        ModelChannel_AWGN_BPSK_CSK(&csk, &code, &decoder, &table, codeWord, snrValue, &randomSeed);
         #endif
         #ifndef CCSK
-            // printf("BPSK Noise Added.\n"); //This noise is added.
-            //function in channel.c
-            ModelChannel_AWGN_BPSK (&code, &decoder, &table,  NBIN, EbN,&Idum);
-           // ModelChannel_AWGN_BPSK_repeat (&code, &decoder, &table,  NBIN, EbN,&Idum);
-        //ModelChannel_AWGN_64 (&code, &decoder, NBIN, EbN,&Idum);
-        //ModelChannel(&code, &decoder,  NBIN, EbN,&Idum);
+        ModelChannel_AWGN_BPSK(&code, &decoder, &table, codeBits, snrValue, &randomSeed);
         #endif
-
 
         /***********************************************/
         /* Implementation of the horizontal scheduling */
-        //Do interleaving here
 
-
-        // init Mvc with intrinsic
-        for (n=0; n<code.N; n++)
+        // Initialize VtoC with intrinsic values
+        for (n = 0; n < code.N; n++)
         {
-            for (k=0; k<code.GF; k++)
+            for (k = 0; k < code.GF; k++)
             {
                 decoder.VtoC[n][k] = decoder.intrinsic_LLR[n][k];
             }
         }
 
-
-
-        /* Decoding iterations*/
-        for (iter=0; iter < NbIterMax - 1; iter++)
+        /* Decoding iterations */
+        for (iteration = 0; iteration < maxIterations - 1; iteration++)
         {
-
-            for (node=0; node<code.M; node++) /* Loop for the M Check nodes */
+            for (checkNode = 0; checkNode < code.M; checkNode++) /* Loop for the M Check nodes */
             {
-                for (i=0; i < code.rowDegree[node]; i++)
+                for (i = 0; i < code.rowDegree[checkNode]; i++)
                 {
-                    for (k=0; k < code.GF; k++)
+                    for (k = 0; k < code.GF; k++)
                     {
-                        Mvc_temp[i][k] = decoder.VtoC[code.mat[node][i]][k];
-                        Mvc_temp2[i][k] = Mvc_temp[i][k];
+                        messageVtoC_temp[i][k] = decoder.VtoC[code.mat[checkNode][i]][k];
+                        messageVtoC_temp2[i][k] = messageVtoC_temp[i][k];
                     }
                 }
 
-
-                // sorting Mvc values
-                for (i=0; i < code.rowDegree[node]; i++)
+                // Sorting Mvc values
+                for (i = 0; i < code.rowDegree[checkNode]; i++)
                 {
-                    for(k=0; k<decoder.n_vc; k++)
+                    for (k = 0; k < decoder.n_vc; k++)
                     {
-                        decoder.M_VtoC_LLR[i][k]=+1e5;
-                        decoder.M_VtoC_GF[i][k]=0;
-                        for (g=0; g<code.GF; g++)
+                        decoder.M_VtoC_LLR[i][k] = +1e5;
+                        decoder.M_VtoC_GF[i][k] = 0;
+                        for (g = 0; g < code.GF; g++)
                         {
-                            if (Mvc_temp2[i][g] < decoder.M_VtoC_LLR[i][k])
+                            if (messageVtoC_temp2[i][g] < decoder.M_VtoC_LLR[i][k])
                             {
-                                decoder.M_VtoC_LLR[i][k]=Mvc_temp2[i][g];
-                                decoder.M_VtoC_GF[i][k]=g;
+                                decoder.M_VtoC_LLR[i][k] = messageVtoC_temp2[i][g];
+                                decoder.M_VtoC_GF[i][k] = g;
                             }
                         }
-                        Mvc_temp2[i][decoder.M_VtoC_GF[i][k]]=+1e5;
+                        messageVtoC_temp2[i][decoder.M_VtoC_GF[i][k]] = +1e5;
                     }
 
-                    // Normalisation  */
-                    for(g=1; g<decoder.n_vc; g++)
-                        {
-                            decoder.M_VtoC_LLR[i][g]= decoder.M_VtoC_LLR[i][g]-decoder.M_VtoC_LLR[i][0];
-                            //printf(" GF:%d  LLR:%0.2f \n",decoder.M_VtoC_GF[i][g],decoder.M_VtoC_LLR[i][g] );
-                        }
-                        //getchar();
-                    decoder.M_VtoC_LLR[i][0]=0.0;
-                }
-
-
-
-                CheckPassLogEMS (node, &decoder, &code, &table,NbOper,offset);
-                //CheckPassLogEMS_dc3(node, &decoder, &code, &table,NbOper,offset);
-
-
-                //compute SO
-                for (i=0; i < code.rowDegree[node]; i++)
-                {
-                    for (k=0; k < code.GF; k++)
+                    // Normalization
+                    for (g = 1; g < decoder.n_vc; g++)
                     {
-                        decoder.APP[code.mat[node][i]][k] = decoder.M_CtoV_LLR[i][k] + Mvc_temp[i][k];
-                        decoder.VtoC[code.mat[node][i]][k]= decoder.M_CtoV_LLR[i][k] + decoder.intrinsic_LLR[code.mat[node][i]][k];// compute Mvc and save RAM
+                        decoder.M_VtoC_LLR[i][g] = decoder.M_VtoC_LLR[i][g] - decoder.M_VtoC_LLR[i][0];
                     }
+                    decoder.M_VtoC_LLR[i][0] = 0.0;
                 }
 
+                CheckPassLogEMS(checkNode, &decoder, &code, &table, maxOperations, offsetFactor);
 
-                /*******************************************************************************************************************/
-                /*******************************************************************************************************************/
+                // Compute soft output
+                for (i = 0; i < code.rowDegree[checkNode]; i++)
+                {
+                    for (k = 0; k < code.GF; k++)
+                    {
+                        decoder.APP[code.mat[checkNode][i]][k] = decoder.M_CtoV_LLR[i][k] + messageVtoC_temp[i][k];
+                        decoder.VtoC[code.mat[checkNode][i]][k] = decoder.M_CtoV_LLR[i][k] + decoder.intrinsic_LLR[code.mat[checkNode][i]][k]; // Compute Mvc and save RAM
+                    }
+                }
+            } /* End of the node update */
 
-            } /* End of the node update*/
-
-            Decision (decide, decoder.APP, code.N, code.GF);
-            synd = Syndrom (&code, decide, &table);
-            //print the decoded codeword "decide"
-            // printf("Syndrome = %d Decoded codeword: \n", synd);
-            // for (n=0; n<code.K; n++)
-            // {
-            //     for (g=0; g<code.logGF; g++)
-            //     {
-            //         printf("%d",table.BINGF[decide[n]][g]);
-            //     }
-            //     //printf(" -> %d \n",decide[n]);
-            // }
-            // printf("\n");
-            if (synd == 0)
+            Decision(decodedSymbols, decoder.APP, code.N, code.GF);
+            syndrom = Syndrom(&code, decodedSymbols, &table);
+            
+            if (syndrom == 0)
                 break;
         }
 
-        sum_it= sum_it+ iter +1;
+        totalIterations = totalIterations + iteration + 1;
 
-
-
-        /* Compute the Bit Error Rate (BER)*/
-        nbErrors = 0;
-        for (k=0; k<code.K; k++)
+        /* Compute the Bit Error Rate (BER) */
+        numBitErrors = 0;
+        for (k = 0; k < code.K; k++)
         {
-            for (l=0; l<code.logGF; l++)
-                if (table.BINGF[decide[k]][l] != NBIN[k][l])
-                    nbErrors ++ ;
+            for (l = 0; l < code.logGF; l++)
+                if (table.BINGF[decodedSymbols[k]][l] != codeBits[k][l])
+                    numBitErrors++;
         }
 
-
-        total_errors = total_errors + nbErrors;
-        if (nbErrors != 0)
+        totalBitErrors = totalBitErrors + numBitErrors;
+        if (numBitErrors != 0)
         {
-            nbErroneousFrames ++;
-            if (synd == 0)
-                nbUndetectedErrors ++;
+            numFrameErrors++;
+            if (syndrom == 0)
+                numUndetectedErrors++;
         }
-        if (nb%10 ==0)
+        
+        if (frameCount % 10 == 0)
         {
-                    printf("\r<%d> FER= %d / %d = %f BER= %d / x = %f  avr_it=%.2f",
-               nbUndetectedErrors, nbErroneousFrames, nb,(double)(nbErroneousFrames)/ nb,total_errors,(double)total_errors/(nb*code.K*code.logGF),(double)(sum_it)/nb);
-        fflush(stdout);
+            printf("\r<%d> FER= %d / %d = %f BER= %d / x = %f  avr_it=%.2f",
+                numUndetectedErrors, numFrameErrors, frameCount, (double)(numFrameErrors) / frameCount, 
+                totalBitErrors, (double)totalBitErrors / (frameCount * code.K * code.logGF), 
+                (double)(totalIterations) / frameCount);
+            fflush(stdout);
         }
 
-
-
-        if (nbErroneousFrames == 40)
+        if (numFrameErrors == 40)
             break;
-
-
-
     }
 
     printf("\r<%d> FER= %d / %d = %f BER= %d / x = %f  avr_it=%.2f",
-    nbUndetectedErrors, nbErroneousFrames, nb,(double)(nbErroneousFrames)/ nb,total_errors,(double)total_errors/(nb*code.K*code.logGF),(double)(sum_it)/nb);
+        numUndetectedErrors, numFrameErrors, frameCount, (double)(numFrameErrors) / frameCount,
+        totalBitErrors, (double)totalBitErrors / (frameCount * code.K * code.logGF),
+        (double)(totalIterations) / frameCount);
 
-    printf(" \n results are printed in file %s \n",file_name);
+    printf(" \n results are printed in file %s \n", fileName);
 
-
-
-    end_time = time(NULL);
-    c_time_string = ctime(&end_time);
-    exec_time = difftime(end_time,start_time);
-    opfile=fopen(file_name,"a");
-//opfile=fopen("./data/results.txt","a");
-    if ((opfile)==NULL)
+    endTime = time(NULL);
+    timeString = ctime(&endTime);
+    executionTime = difftime(endTime, startTime);
+    resultFile = fopen(fileName, "a");
+    
+    if ((resultFile) == NULL)
     {
         printf(" \n !! file not found \n ");
     }
     else
     {
-        fprintf(opfile," SNR:%.2f: \t FER= %d / %d = %f ", EbN, nbErroneousFrames, nb,(double)(nbErroneousFrames)/ nb );
-        fprintf(opfile," \t BER= %d / x = \t %f  avr_it= \t %.2f \t time: %s",total_errors, (double)total_errors/(double)(nb*code.K*code.logGF),(double)(sum_it)/nb , c_time_string );
+        fprintf(resultFile, " SNR:%.2f: \t FER= %d / %d = %f ", snrValue, numFrameErrors, frameCount, (double)(numFrameErrors) / frameCount);
+        fprintf(resultFile, " \t BER= %d / x = \t %f  avr_it= \t %.2f \t time: %s", totalBitErrors, 
+                (double)totalBitErrors / (double)(frameCount * code.K * code.logGF), 
+                (double)(totalIterations) / frameCount, timeString);
     }
-    fclose(opfile);
-    // printf(" \n results printed \n ");
-
+    fclose(resultFile);
 
     printf("\n");
-    printf("Simulation complete at time: %s", c_time_string);
-
-    printf("execution time:%0.2f",exec_time);
+    printf("Simulation complete at time: %s", timeString);
+    printf("execution time:%0.2f", executionTime);
 
     getchar();
 
-    free(FileName);
-    free(FileMatrix);
-    free(name);
-    free(decide);
-    free(CodeWord);
-    free(KSYMB);
-    free(NSYMB);
+    // Free allocated memory
+    free(outputFileName);
+    free(matrixFileName);
+    free(simulationName);
+    free(decodedSymbols);
+    free(codeWord);
+    free(infoSymbols);
+    free(codeSymbols);
 
-    for (n=0; n<code.N; n++) free(NBIN[n]);
-    free(NBIN);
-    for (k=0; k<code.K; k++) free(KBIN[k]);
-    free(KBIN);
+    for (n = 0; n < code.N; n++) free(codeBits[n]);
+    free(codeBits);
+    for (k = 0; k < code.K; k++) free(infoBits[k]);
+    free(infoBits);
 
     FreeCode(&code);
     FreeDecoder(&decoder);

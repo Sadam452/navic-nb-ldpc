@@ -1,9 +1,9 @@
 /*!
  * \file bubble_decoder.c
- * \brief Check node based on bubbles
- * \author C.Marchand
- * \copyright BSD copyright
- * \date 03/03/2015
+ * \brief Implementation of check node processing using the bubble decoder algorithm
+ * 
+ * This file contains implementations for the bubble check node processing
+ * algorithm, which is used in decoding non-binary LDPC codes.
  */
 
 #include <stdlib.h>
@@ -11,929 +11,594 @@
 #include "./include/syndrome_decoder.h"
 #include "./include/bubble_decoder.h"
 
-
-
-
-
-int maximum(float *Y, int nl)
+/**
+ * \fn find_maximum
+ * \brief Finds the index of the maximum value in an array
+ * 
+ * @param values Array of float values to search
+ * @param length Length of the array
+ * @return Index of the maximum value
+ */
+int find_maximum(float *values, int length)
 {
-
-    float aux = 0.0;
-    int pos = 0;
-    int i;
-
-    for (i=0; i<nl ; i++)
-    {
-        if (Y[i] > aux)
-        {
-            aux = Y[i];
-            pos = i;
+    float max_value = values[0];
+    int max_index = 0;
+    
+    for (int i = 1; i < length; i++) {
+        if (values[i] > max_value) {
+            max_value = values[i];
+            max_index = i;
         }
     }
-
-    return pos;
-
+    
+    return max_index;
 }
 
-int minimum(float *Y, int nl)
+/**
+ * \fn find_minimum
+ * \brief Finds the index of the minimum value in an array
+ * 
+ * @param values Array of float values to search
+ * @param length Length of the array
+ * @return Index of the minimum value
+ */
+int find_minimum(float *values, int length)
 {
-
-    float aux = 1e5;
-    int pos = 0;
-    int i;
-
-    for (i=0; i<nl ; i++)
-    {
-        if (Y[i] < aux)
-        {
-            aux = Y[i];
-            pos = i;
+    float min_value = values[0];
+    int min_index = 0;
+    
+    for (int i = 1; i < length; i++) {
+        if (values[i] < min_value) {
+            min_value = values[i];
+            min_index = i;
         }
     }
-
-    return pos;
-
+    
+    return min_index;
 }
 
+/**
+ * \fn ElementaryStep
+ * \brief Performs elementary bubble check node processing
+ * 
+ * This function implements the core bubble check node algorithm, combining
+ * two input messages to produce an output message.
+ * 
+ * @param input1 First input LLR values
+ * @param input2 Second input LLR values
+ * @param indice_input1 First input GF indices
+ * @param indice_input2 Second input GF indices
+ * @param output Output LLR values
+ * @param indice_out Output GF indices
+ * @param add_gf GF addition table
+ * @param gf_size Size of the Galois Field
+ * @param max_size Maximum size of inputs/outputs
+ * @param num_operations Number of operations to perform
+ * @return 0 on success
+ */
+int ElementaryStep(float *input1, float *input2, int *indice_input1, int *indice_input2,
+                   float *output, int *indice_out, int **add_gf, int gf_size, 
+                   int max_size, int num_operations)
+{
+    const int NUM_BUBBLES = 8;
+    const int HALF_BUBBLES = NUM_BUBBLES / 2;
+    const float INFINITY_VALUE = 1e5;
+    
+    // Initialize temporary arrays for output
+    float temp_output[max_size];
+    int temp_indice_out[max_size];
+    
+    // Track which GF values have been added to output
+    int *gf_values_seen = (int *)calloc(gf_size, sizeof(int));
+    for (int i = 0; i < gf_size; i++) {
+        gf_values_seen[i] = -1;
+    }
+    
+    // Initialize output arrays
+    for (int i = 0; i < max_size; i++) {
+        temp_output[i] = INFINITY_VALUE;
+        temp_indice_out[i] = -1;
+    }
+    
+    // Pre-compute additions for initial bubbles
+    float addition_table[max_size][max_size];
+    
+    // Horizontal pre-computation
+    for (int j = 0; j < HALF_BUBBLES; j++) {
+        for (int i = 0; i < max_size; i++) {
+            addition_table[i][j] = input1[i] + input2[j]; // Min-sum algorithm
+        }
+    }
+    
+    // Vertical pre-computation
+    for (int i = 0; i < HALF_BUBBLES; i++) {
+        for (int j = HALF_BUBBLES; j < max_size; j++) {
+            addition_table[i][j] = input1[i] + input2[j]; // Min-sum algorithm
+        }
+    }
+    
+    // Initialize competitor matrix
+    float competitor_values[NUM_BUBBLES];
+    int competitor_row[NUM_BUBBLES];
+    int competitor_col[NUM_BUBBLES];
+    
+    // Vertical competitors
+    for (int j = 0; j < HALF_BUBBLES; j++) {
+        competitor_values[j] = addition_table[j][0];
+        competitor_row[j] = j;
+        competitor_col[j] = 0;
+    }
+    
+    // Horizontal competitors
+    for (int j = 0; j < HALF_BUBBLES; j++) {
+        competitor_values[j + HALF_BUBBLES] = addition_table[HALF_BUBBLES][j];
+        competitor_row[j + HALF_BUBBLES] = HALF_BUBBLES;
+        competitor_col[j + HALF_BUBBLES] = j;
+    }
+    
+    // Fill output arrays
+    int output_index = 0;
+    
+    for (int op = 0; op < num_operations; op++) {
+        int pos = find_minimum(competitor_values, NUM_BUBBLES);
+        
+        // Check for out of bounds
+        if ((indice_input1[competitor_row[pos]] == -1) || (indice_input2[competitor_col[pos]] == -1)) {
+            break;
+        }
+        
+        // Calculate GF addition (XOR for binary case)
+        int gf_result = indice_input1[competitor_row[pos]] ^ indice_input2[competitor_col[pos]];
+        
+        // Add to output if not already present
+        if (gf_values_seen[gf_result] == -1) {
+            temp_output[output_index] = competitor_values[pos];
+            temp_indice_out[output_index] = gf_result;
+            gf_values_seen[gf_result] = 1;
+            output_index++;
+        }
+        
+        // Stop if we've filled the output
+        if (output_index == max_size) {
+            break;
+        }
+        
+        // Update competitor with next value
+        if (pos >= HALF_BUBBLES) {
+            competitor_row[pos]++;
+        } else {
+            competitor_col[pos]++;
+        }
+        
+        // Check bounds
+        if (competitor_row[pos] >= max_size || competitor_col[pos] >= max_size) {
+            competitor_values[pos] = INFINITY_VALUE;
+        } else {
+            competitor_values[pos] = addition_table[competitor_row[pos]][competitor_col[pos]];
+        }
+    }
+    
+    // Copy temporary arrays to output
+    for (int i = 0; i < max_size; i++) {
+        output[i] = temp_output[i];
+        indice_out[i] = temp_indice_out[i];
+    }
+    
+    free(gf_values_seen);
+    return 0;
+}
 
-
-
-
-
+/**
+ * \fn ElementaryStep_nm
+ * \brief Performs elementary bubble check node processing with different input/output sizes
+ * 
+ * This variant of ElementaryStep handles different sizes for input and output arrays.
+ * 
+ * @param input1 First input LLR values
+ * @param input2 Second input LLR values
+ * @param indice_input1 First input GF indices
+ * @param indice_input2 Second input GF indices
+ * @param output Output LLR values
+ * @param indice_out Output GF indices
+ * @param add_gf GF addition table
+ * @param gf_size Size of the Galois Field
+ * @param input1_size Size of the first input
+ * @param input2_size Size of the second input
+ * @param output_size Size of the output
+ * @param num_operations Number of operations to perform
+ * @return 0 on success
+ */
+int ElementaryStep_nm(float *input1, float *input2, int *indice_input1, int *indice_input2,
+                      float *output, int *indice_out, int **add_gf, int gf_size,
+                      int input1_size, int input2_size, int output_size, int num_operations)
+{
+    const int NUM_BUBBLES = 8;
+    const int HALF_BUBBLES = NUM_BUBBLES / 2;
+    const float INFINITY_VALUE = 1e5;
+    
+    // Initialize temporary arrays for output
+    float temp_output[output_size];
+    int temp_indice_out[output_size];
+    
+    // Track which GF values have been added to output
+    int *gf_values_seen = (int *)calloc(gf_size, sizeof(int));
+    for (int i = 0; i < gf_size; i++) {
+        gf_values_seen[i] = -1;
+    }
+    
+    // Initialize output arrays
+    for (int i = 0; i < output_size; i++) {
+        temp_output[i] = INFINITY_VALUE;
+        temp_indice_out[i] = -1;
+    }
+    
+    // Pre-compute additions for initial bubbles
+    float addition_table[input1_size + 1][input2_size + 1];
+    
+    // Horizontal pre-computation
+    for (int j = 0; j < HALF_BUBBLES; j++) {
+        for (int i = 0; i < input1_size; i++) {
+            addition_table[i][j] = input1[i] + input2[j]; // Min-sum algorithm
+        }
+        addition_table[input1_size][j] = INFINITY_VALUE;
+    }
+    
+    // Vertical pre-computation
+    for (int i = 0; i < HALF_BUBBLES; i++) {
+        for (int j = HALF_BUBBLES; j < input2_size; j++) {
+            addition_table[i][j] = input1[i] + input2[j]; // Min-sum algorithm
+        }
+        addition_table[i][input2_size] = INFINITY_VALUE;
+    }
+    
+    // Initialize competitor matrix
+    float competitor_values[NUM_BUBBLES];
+    int competitor_row[NUM_BUBBLES];
+    int competitor_col[NUM_BUBBLES];
+    
+    // Vertical competitors
+    for (int j = 0; j < HALF_BUBBLES; j++) {
+        competitor_values[j] = addition_table[j][0];
+        competitor_row[j] = j;
+        competitor_col[j] = 0;
+    }
+    
+    // Horizontal competitors
+    for (int j = 0; j < HALF_BUBBLES; j++) {
+        competitor_values[j + HALF_BUBBLES] = addition_table[HALF_BUBBLES][j];
+        competitor_row[j + HALF_BUBBLES] = HALF_BUBBLES;
+        competitor_col[j + HALF_BUBBLES] = j;
+    }
+    
+    // Fill output arrays
+    int output_index = 0;
+    
+    for (int op = 0; op < num_operations; op++) {
+        int pos = find_minimum(competitor_values, NUM_BUBBLES);
+        
+        // Check for out of bounds
+        if ((indice_input1[competitor_row[pos]] == -1) || (indice_input2[competitor_col[pos]] == -1)) {
+            break;
+        }
+        
+        // Calculate GF addition (XOR for binary case)
+        int gf_result = indice_input1[competitor_row[pos]] ^ indice_input2[competitor_col[pos]];
+        
+        // Add to output if not already present
+        if (gf_values_seen[gf_result] == -1) {
+            temp_output[output_index] = competitor_values[pos];
+            temp_indice_out[output_index] = gf_result;
+            gf_values_seen[gf_result] = 1;
+            output_index++;
+        }
+        
+        // Stop if we've filled the output
+        if (output_index == output_size) {
+            break;
+        }
+        
+        // Update competitor with next value
+        if (pos >= HALF_BUBBLES) {
+            competitor_row[pos]++;
+        } else {
+            competitor_col[pos]++;
+        }
+        
+        // Check bounds
+        if (competitor_row[pos] >= input1_size || competitor_col[pos] >= input2_size) {
+            competitor_values[pos] = INFINITY_VALUE;
+        } else {
+            competitor_values[pos] = addition_table[competitor_row[pos]][competitor_col[pos]];
+        }
+    }
+    
+    // Copy temporary arrays to output
+    for (int i = 0; i < output_size; i++) {
+        output[i] = temp_output[i];
+        indice_out[i] = temp_indice_out[i];
+    }
+    
+    free(gf_values_seen);
+    return 0;
+}
 
 /**
  * \fn CheckPassLogEMS
- * \brief Process the Check to Variable messages in the decoding graph.
- * Inputs
- * 	- decoder->VtoC
- * Outputs
- * 	- decoder->CtoV
+ * \brief Process the Check to Variable messages in the decoding graph
+ * 
+ * This function implements the check node processing for general row degree.
+ * It processes Variable to Check messages and produces Check to Variable messages
+ * using the bubble decoder algorithm.
+ * 
+ * @param node Current check node index
+ * @param decoder Decoder state
+ * @param code Code parameters
+ * @param table Lookup tables for GF operations
+ * @param num_operations Number of operations to perform
+ * @param offset Offset value for LLR calculation
  */
-void CheckPassLogEMS (int node,decoder_t *decoder, code_t *code, table_t *table,int NbOper, float offset)
+void CheckPassLogEMS(int node, decoder_t *decoder, code_t *code, table_t *table, 
+                     int num_operations, float offset)
 {
-    const int nbMax = decoder->n_vc;
-
-    int        t,k,g,kk,S,c,k1,Stp;
-    int        **MatriceInterIndice,*OutForwardIndice,*OutBackwardIndice,*OutForwardIndice1,*OutBackwardIndice1;
-    float      **MatriceInter,*OutForward,*OutBackward,*OutForward1,*OutBackward1;
-    float LLR_tmp[code->GF];
-
-
-
-    //Temporary buffers (for the F/B recursivity)
-
-    OutForward=(float *)calloc(nbMax,sizeof(float));
-    OutForwardIndice=(int *)calloc(nbMax,sizeof(int));
-    OutBackward=(float *)calloc(nbMax,sizeof(float));
-    OutBackwardIndice=(int *)calloc(nbMax,sizeof(int));
-
-    OutForward1=(float *)calloc(nbMax,sizeof(float));
-    OutForwardIndice1=(int *)calloc(nbMax,sizeof(int));
-    OutBackward1=(float *)calloc(nbMax,sizeof(float));
-    OutBackwardIndice1=(int *)calloc(nbMax,sizeof(int));
-
-
-    // Number of steps F/B = S
-    S=2*(code->rowDegree[node]-2);
-
-// MatriceInter - store the results (reeal values) of the F/B recursivity
-    MatriceInter=(float **)calloc(S,sizeof(float*));
-    for (k=0; k<S; k++)
-    {
-        MatriceInter[k]=(float *)calloc(nbMax,sizeof(float));
-        for (k1=0; k1<nbMax; k1++)
-        {
-            MatriceInter[k][k1]=1e5;
+    const int max_size = decoder->n_vc;
+    const float INFINITY_VALUE = 1e5;
+    int row_degree = code->rowDegree[node];
+    int num_steps = 2 * (row_degree - 2);
+    int t, k, g, k1, Stp=0;
+    
+    // Allocate temporary buffers for forward/backward recursion
+    float *forward = (float *)calloc(max_size, sizeof(float));
+    int *forward_indices = (int *)calloc(max_size, sizeof(int));
+    float *backward = (float *)calloc(max_size, sizeof(float));
+    int *backward_indices = (int *)calloc(max_size, sizeof(int));
+    
+    float *forward1 = (float *)calloc(max_size, sizeof(float));
+    int *forward1_indices = (int *)calloc(max_size, sizeof(int));
+    float *backward1 = (float *)calloc(max_size, sizeof(float));
+    int *backward1_indices = (int *)calloc(max_size, sizeof(int));
+    
+    // Allocate intermediate results storage
+    float **intermediate_values = (float **)calloc(num_steps, sizeof(float *));
+    int **intermediate_indices = (int **)calloc(num_steps, sizeof(int *));
+    
+    for (k = 0; k < num_steps; k++) {
+        intermediate_values[k] = (float *)calloc(max_size, sizeof(float));
+        intermediate_indices[k] = (int *)calloc(max_size, sizeof(int));
+        
+        for (k1 = 0; k1 < max_size; k1++) {
+            intermediate_values[k][k1] = INFINITY_VALUE;
+            intermediate_indices[k][k1] = -1;
         }
     }
-
-
-//MatriceInterIndice - that store the results (GF(q) values) of the F/B recursivity
-    MatriceInterIndice=(int **)calloc(S,sizeof(int*));
-    for (k=0; k<S; k++)
-    {
-        MatriceInterIndice[k]=(int *)calloc(nbMax,sizeof(int));
-        for (k1=0; k1<nbMax; k1++)
-        {
-            MatriceInterIndice[k][k1]=-1;
-        }
+    
+    // Initialize temporary buffers
+    for (k = 0; k < max_size; k++) {
+        forward[k] = INFINITY_VALUE;
+        backward[k] = INFINITY_VALUE;
+        forward_indices[k] = -1;
+        backward_indices[k] = -1;
     }
-
-//Initialization of the temporary buffers
-    for (k=0; k<nbMax; k++)
-    {
-        OutForward[k]=1e5;
-        OutBackward[k]=1e5;
-        OutForwardIndice[k]=-1;
-        OutBackwardIndice[k]=-1;
-    }
-
-
-//Rotation par la valeur non nulle dans la matrice pour VtoC
-    for(t=0; t<code->rowDegree[node]; t++)
-    {
-        //printf("\n node=%d, coef=%d \n",node,code->matValue[node][t] );
-        for(k=0; k<nbMax; k++)
-        {
-            //printf(" %d ->",decoder->M_VtoC_GF[t][k]);
-
-            if (decoder->M_VtoC_GF[t][k]!=-1)
-            {
-                c=decoder->M_VtoC_GF[t][k];
-
-                // GF multiplication and output decimal
-                c=table->MULDEC[c][code->matValue[node][t]];
-
-                decoder->M_VtoC_GF[t][k] =c;
-
+    
+    // Apply GF rotation to variable-to-check messages
+    for (t = 0; t < row_degree; t++) {
+        for (k = 0; k < max_size; k++) {
+            if (decoder->M_VtoC_GF[t][k] != -1) {
+                int gf_value = decoder->M_VtoC_GF[t][k];
+                // GF multiplication
+                gf_value = table->MULDEC[gf_value][code->matValue[node][t]];
+                decoder->M_VtoC_GF[t][k] = gf_value;
             }
-            else printf("M_VtoC_GF[%d][%d]=%d\n",t,k,decoder->M_VtoC_GF[t][k]);
-
-            //printf(" %d ->",decoder->M_VtoC_GF[t][k]);
-
         }
     }
-
-
-
-//Initialisation algorithm
-    for(k=0; k<nbMax; k++)
-    {
-        OutForward[k]=decoder->M_VtoC_LLR[0][k];
-        OutForwardIndice[k]=decoder->M_VtoC_GF[0][k];
-        OutBackward[k]=decoder->M_VtoC_LLR[code->rowDegree[node]-1][k];
-        OutBackwardIndice[k]=decoder->M_VtoC_GF[code->rowDegree[node]-1][k];
+    
+    // Initialize forward/backward messages
+    for (k = 0; k < max_size; k++) {
+        forward[k] = decoder->M_VtoC_LLR[0][k];
+        forward_indices[k] = decoder->M_VtoC_GF[0][k];
+        backward[k] = decoder->M_VtoC_LLR[row_degree - 1][k];
+        backward_indices[k] = decoder->M_VtoC_GF[row_degree - 1][k];
     }
-
-// Start of the recusivity
-    for(kk=1; kk<(code->rowDegree[node]-1); kk++)
-    {
-
-
-        for(k=0; k<nbMax; k++)
-        {
-            //forward step
-            OutForward1[k]=decoder->M_VtoC_LLR[kk][k];
-            OutForwardIndice1[k]=decoder->M_VtoC_GF[kk][k];
-            //backward step
-            OutBackward1[k]=decoder->M_VtoC_LLR[code->rowDegree[node]-kk-1][k];
-            OutBackwardIndice1[k]=decoder-> M_VtoC_GF[code->rowDegree[node]-kk-1][k];
+    
+    // Forward-backward recursion
+    for (int kk = 1; kk < row_degree - 1; kk++) {
+        // Copy current messages
+        for (k = 0; k < max_size; k++) {
+            forward1[k] = decoder->M_VtoC_LLR[kk][k];
+            forward1_indices[k] = decoder->M_VtoC_GF[kk][k];
+            backward1[k] = decoder->M_VtoC_LLR[row_degree - kk - 1][k];
+            backward1_indices[k] = decoder->M_VtoC_GF[row_degree - kk - 1][k];
         }
-
-        for(k=0; k<nbMax; k++)
-        {
-            // Storage of the intermediate vectors
-            MatriceInter[kk-1][k]=OutForward[k];
-            MatriceInterIndice[kk-1][k]=OutForwardIndice[k];
-            MatriceInter[2*(code->rowDegree[node]-2)-kk][k]=OutBackward[k];
-            MatriceInterIndice[2*(code->rowDegree[node]-2)-kk][k]=OutBackwardIndice[k];
+        
+        // Store intermediate values
+        for (k = 0; k < max_size; k++) {
+            intermediate_values[kk - 1][k] = forward[k];
+            intermediate_indices[kk - 1][k] = forward_indices[k];
+            intermediate_values[num_steps - kk][k] = backward[k];
+            intermediate_indices[num_steps - kk][k] = backward_indices[k];
         }
-
-        //forward step
-        //printf(" \n forward step %d \n",kk);
-        if(kk<(code->rowDegree[node]-1))
-            ElementaryStep(OutForward,OutForward1,OutForwardIndice,OutForwardIndice1,OutForward,OutForwardIndice,table->ADDGF,code->GF,nbMax,NbOper);
-
-
-        //backward step
-        //printf(" \n backward step %d \n",kk);
-        if(kk<(code->rowDegree[node]-1))
-            ElementaryStep(OutBackward,OutBackward1,OutBackwardIndice,OutBackwardIndice1,OutBackward,OutBackwardIndice,table->ADDGF,code->GF,nbMax,NbOper);
-
+        
+        // Forward step
+        ElementaryStep(forward, forward1, forward_indices, forward1_indices,
+                       forward, forward_indices, table->ADDGF, code->GF, 
+                       max_size, num_operations);
+        
+        // Backward step
+        ElementaryStep(backward, backward1, backward_indices, backward1_indices,
+                       backward, backward_indices, table->ADDGF, code->GF, 
+                       max_size, num_operations);
     }
-
-
-    //Update of vectors CtoV (first and last)
-    for(k=0; k<nbMax; k++)
-    {
-        // last vector M_CtoV_LLR
-        decoder->M_CtoV_LLR[code->rowDegree[node]-1][k]=OutForward[k];
-        decoder->M_CtoV_GF[code->rowDegree[node]-1][k]=OutForwardIndice[k];
-        // first vector M_CtoV_LLR
-        decoder->M_CtoV_LLR[0][k]=OutBackward[k];
-        decoder->M_CtoV_GF[0][k]=OutBackwardIndice[k];
-
+    
+    // Update the first and last CtoV messages
+    for (k = 0; k < max_size; k++) {
+        // Last vector
+        decoder->M_CtoV_LLR[row_degree - 1][k] = forward[k];
+        decoder->M_CtoV_GF[row_degree - 1][k] = forward_indices[k];
+        // First vector
+        decoder->M_CtoV_LLR[0][k] = backward[k];
+        decoder->M_CtoV_GF[0][k] = backward_indices[k];
     }
-
-    //printf("\n merge \n");
-    //Update of the others vectors CtoV
-    for(k=0; k<(code->rowDegree[node]-2); k++)
-    {
-
-
-        ElementaryStep(MatriceInter[k],MatriceInter[(code->rowDegree[node]-2)+k],MatriceInterIndice[k],MatriceInterIndice[(code->rowDegree[node]-2)  +k],OutForward,OutForwardIndice,table->ADDGF,code->GF,nbMax,NbOper);
-        for(g=0; g<nbMax; g++)
-        {
-            decoder->M_CtoV_LLR[k+1][g]=OutForward[g];
-            decoder->M_CtoV_GF[k+1][g]=OutForwardIndice[g];
+    
+    // Update intermediate CtoV messages using merging
+    for (k = 0; k < row_degree - 2; k++) {
+        ElementaryStep(intermediate_values[k], intermediate_values[row_degree - 2 + k],
+                      intermediate_indices[k], intermediate_indices[row_degree - 2 + k],
+                      forward, forward_indices, table->ADDGF, code->GF, 
+                      max_size, num_operations);
+        
+        for (g = 0; g < max_size; g++) {
+            decoder->M_CtoV_LLR[k + 1][g] = forward[g];
+            decoder->M_CtoV_GF[k + 1][g] = forward_indices[g];
         }
     }
-
-
-//Rotation par la valeur non nulle dans la matrice pour CtoV
-    for(t=0; t<code->rowDegree[node]; t++)
-    {
-        for(k=0; k<nbMax; k++)
-        {
-
-            if (decoder->M_CtoV_GF[t][k]== -1)
-            {
-                Stp=k;
+    
+    // Apply inverse GF rotation to check-to-variable messages
+    float llr_tmp[code->GF];
+    
+    for (t = 0; t < row_degree; t++) {
+        // Find the stopping point
+        for (k = 0; k < max_size; k++) {
+            if (decoder->M_CtoV_GF[t][k] == -1) {
+                Stp = k;
                 break;
+            } else {
+                Stp = max_size;
             }
-            else
-                Stp=nbMax;
         }
-
-        // back to GF symbol and devise
-        for(k=0; k<Stp; k++)
-        {
-            //decoder->M_CtoV_GF[t][k]=table->DIVGF[decoder->M_CtoV_GF[t][k]][code->matValue[node][t]];
-            decoder->M_CtoV_GF[t][k]=table->DIVDEC[decoder->M_CtoV_GF[t][k]][code->matValue[node][t]];
+        
+        // GF division
+        for (k = 0; k < Stp; k++) {
+            decoder->M_CtoV_GF[t][k] = table->DIVDEC[decoder->M_CtoV_GF[t][k]][code->matValue[node][t]];
         }
-
-/// reorder in GF order and add offset
-//printf("sat=%0.3f \n", decoder->M_CtoV_LLR[t][Stp-1] + offset );
-//getchar();
-
-        if ( decoder->M_CtoV_LLR[t][Stp-1]>0)
-        {
-                for(k=0; k<code->GF; k++)
-                {
-                    LLR_tmp[k] = decoder->M_CtoV_LLR[t][Stp-1] + offset;
-                }
-
-
-                for(k=0; k<Stp; k++)
-                {
-                    LLR_tmp[decoder->M_CtoV_GF[t][k]]= decoder->M_CtoV_LLR[t][k];
-                }
-
-
-
-                for(k=0; k<code->GF; k++)
-                {
-                    //decoder->M_CtoV_GF[t][k] = k;
-                    decoder->M_CtoV_LLR[t][k] = LLR_tmp[k];
-                }
+        
+        if (decoder->M_CtoV_LLR[t][Stp - 1] > 0) {
+            // Apply offset to all LLR values
+            for (k = 0; k < code->GF; k++) {
+                llr_tmp[k] = decoder->M_CtoV_LLR[t][Stp - 1] + offset;
+            }
+            
+            // Update specific LLR values
+            for (k = 0; k < Stp; k++) {
+                llr_tmp[decoder->M_CtoV_GF[t][k]] = decoder->M_CtoV_LLR[t][k];
+            }
+            
+            // Update all CtoV messages
+            for (k = 0; k < code->GF; k++) {
+                decoder->M_CtoV_LLR[t][k] = llr_tmp[k];
+            }
+        } else {
+            // Reset all LLR values
+            for (k = 0; k < code->GF; k++) {
+                decoder->M_CtoV_LLR[t][k] = 0;
+            }
         }
-        else
-        {
-
-                for(k=0; k<code->GF; k++)
-                {
-                    //decoder->M_CtoV_GF[t][k] = k;
-                    decoder->M_CtoV_LLR[t][k] = 0;
-                }
-        }
-
-        for(k=0; k<code->GF; k++)
-        {
+        
+        // Update GF indices
+        for (k = 0; k < code->GF; k++) {
             decoder->M_CtoV_GF[t][k] = k;
         }
-
     }
-
-//    for(g=0; g<code->GF; g++)
-//        {
-//                        printf(" GF=%d, LLR=%0.2f \t GF=%d, LLR=%0.2f \t GF=%d, LLR=%0.2f  \n",decoder->M_CtoV_GF[0][g],decoder->M_CtoV_LLR[0][g] ,
-//                    decoder->M_CtoV_GF[1][g],decoder->M_CtoV_LLR[1][g],decoder->M_CtoV_GF[2][g],decoder->M_CtoV_LLR[2][g]);
-//        }
-//        getchar();
-
-
-
-    for (k=0; k<S; k++) free(MatriceInterIndice[k]);
-    free(MatriceInterIndice);
-    for (k=0; k<S; k++) free(MatriceInter[k]);
-    free(MatriceInter);
-
-    free(OutForward);
-    free(OutForwardIndice);
-    free(OutBackward);
-    free(OutBackwardIndice);
-    free(OutForward1);
-    free(OutForwardIndice1);
-    free(OutBackward1);
-    free(OutBackwardIndice1);
-
+    
+    // Free allocated memory
+    for (k = 0; k < num_steps; k++) {
+        free(intermediate_indices[k]);
+        free(intermediate_values[k]);
+    }
+    free(intermediate_indices);
+    free(intermediate_values);
+    free(forward);
+    free(forward_indices);
+    free(backward);
+    free(backward_indices);
+    free(forward1);
+    free(forward1_indices);
+    free(backward1);
+    free(backward1_indices);
 }
 
-
-
-
-
-
 /**
- * \fn CheckPassLogEMS
- * \brief Process the Check to Variable messages in the decoding graph.
- * Inputs
- * 	- decoder->VtoC
- * Outputs
- * 	- decoder->CtoV
+ * \fn CheckPassLogEMS_dc3
+ * \brief Process the Check to Variable messages for row degree 3
+ * 
+ * This function is an optimized version of CheckPassLogEMS specifically for
+ * check nodes with row degree 3.
+ * 
+ * @param node Current check node index
+ * @param decoder Decoder state
+ * @param code Code parameters
+ * @param table Lookup tables for GF operations
+ * @param num_operations Number of operations to perform
+ * @param offset Offset value for LLR calculation
  */
-void CheckPassLogEMS_dc3 (int node,decoder_t *decoder, code_t *code, table_t *table,int NbOper, float offset)
+void CheckPassLogEMS_dc3(int node, decoder_t *decoder, code_t *code, table_t *table, 
+                         int num_operations, float offset)
 {
     const int n_vc = decoder->n_vc;
     const int n_cv = decoder->n_cv;
-    int   t,c,k,Stp,g;
-    float LLR_tmp[code->GF];
-
-//Rotation par la valeur non nulle dans la matrice pour VtoC
-    for(t=0; t<code->rowDegree[node]; t++)
-    {
-        //printf("\n node=%d, coef=%d \n",node,code->matValue[node][t] );
-        for(k=0; k<n_vc; k++)
-        {
-            //printf(" %d ->",decoder->M_VtoC_GF[t][k]);
-            if (decoder->M_VtoC_GF[t][k]!=-1)
-            {
-                c=decoder->M_VtoC_GF[t][k];
-                // GF multiplication and output decimal
-                c=table->MULDEC[c][code->matValue[node][t]];
-                decoder->M_VtoC_GF[t][k] =c;
+    int t, c, k, Stp=0;
+    float llr_tmp[code->GF];
+    
+    // Apply GF rotation to variable-to-check messages
+    for (t = 0; t < code->rowDegree[node]; t++) {
+        for (k = 0; k < n_vc; k++) {
+            if (decoder->M_VtoC_GF[t][k] != -1) {
+                c = decoder->M_VtoC_GF[t][k];
+                // GF multiplication
+                c = table->MULDEC[c][code->matValue[node][t]];
+                decoder->M_VtoC_GF[t][k] = c;
             }
-            else printf("M_VtoC_GF[%d][%d]=%d\n",t,k,decoder->M_VtoC_GF[t][k]);
-            //printf(" %d ->",decoder->M_VtoC_GF[t][k]);
         }
     }
-
-
-//    printf("print m_vc: \n");
-//    for(g=0; g<n_vc; g++)
-//    {
-//        printf(" GF=%d, LLR=%0.2f \t GF=%d, LLR=%0.2f \t GF=%d, LLR=%0.2f  \n",decoder->M_VtoC_GF[0][g],decoder->M_VtoC_LLR[0][g] ,
-//                decoder->M_VtoC_GF[1][g],decoder->M_VtoC_LLR[1][g],decoder->M_VtoC_GF[2][g],decoder->M_VtoC_LLR[2][g]);
-//    }
-//    getchar();
-
-
- ElementaryStep_nm(decoder->M_VtoC_LLR[0],decoder->M_VtoC_LLR[1],decoder->M_VtoC_GF[0],decoder->M_VtoC_GF[1],decoder->M_CtoV_LLR[2],decoder->M_CtoV_GF[2],table->ADDGF,code->GF,n_vc,n_vc,n_cv,NbOper); // forward
- ElementaryStep_nm(decoder->M_VtoC_LLR[1],decoder->M_VtoC_LLR[2],decoder->M_VtoC_GF[1],decoder->M_VtoC_GF[2],decoder->M_CtoV_LLR[0],decoder->M_CtoV_GF[0],table->ADDGF,code->GF,n_vc,n_vc,n_cv,NbOper); // backward
- ElementaryStep_nm(decoder->M_VtoC_LLR[0],decoder->M_VtoC_LLR[2],decoder->M_VtoC_GF[0],decoder->M_VtoC_GF[2],decoder->M_CtoV_LLR[1],decoder->M_CtoV_GF[1],table->ADDGF,code->GF,n_vc,n_vc,n_cv,NbOper); // merge
-
-//    printf("print m_cv: \n");
-//     for(g=0; g<n_cv; g++)
-//        {
-//            printf(" GF=%d, LLR=%0.2f \t GF=%d, LLR=%0.2f \t GF=%d, LLR=%0.2f  \n",decoder->M_CtoV_GF[0][g],decoder->M_CtoV_LLR[0][g] ,
-//                    decoder->M_CtoV_GF[1][g],decoder->M_CtoV_LLR[1][g],decoder->M_CtoV_GF[2][g],decoder->M_CtoV_LLR[2][g]);
-//        }
-//        getchar();
-
-
-//Rotation par la valeur non nulle dans la matrice pour CtoV
-    for(t=0; t<code->rowDegree[node]; t++)
-    {
-        for(k=0; k<n_cv; k++)
-        {
-
-            if (decoder->M_CtoV_GF[t][k]== -1)
-            {
-                Stp=k;
+    
+    // Specialized elementary steps for row degree 3
+    // Forward step
+    ElementaryStep_nm(decoder->M_VtoC_LLR[0], decoder->M_VtoC_LLR[1],
+                     decoder->M_VtoC_GF[0], decoder->M_VtoC_GF[1],
+                     decoder->M_CtoV_LLR[2], decoder->M_CtoV_GF[2],
+                     table->ADDGF, code->GF, n_vc, n_vc, n_cv, num_operations);
+    
+    // Backward step
+    ElementaryStep_nm(decoder->M_VtoC_LLR[1], decoder->M_VtoC_LLR[2],
+                     decoder->M_VtoC_GF[1], decoder->M_VtoC_GF[2],
+                     decoder->M_CtoV_LLR[0], decoder->M_CtoV_GF[0],
+                     table->ADDGF, code->GF, n_vc, n_vc, n_cv, num_operations);
+    
+    // Merge step
+    ElementaryStep_nm(decoder->M_VtoC_LLR[0], decoder->M_VtoC_LLR[2],
+                     decoder->M_VtoC_GF[0], decoder->M_VtoC_GF[2],
+                     decoder->M_CtoV_LLR[1], decoder->M_CtoV_GF[1],
+                     table->ADDGF, code->GF, n_vc, n_vc, n_cv, num_operations);
+    
+    // Apply inverse GF rotation to check-to-variable messages
+    for (t = 0; t < code->rowDegree[node]; t++) {
+        // Find the stopping point
+        for (k = 0; k < n_cv; k++) {
+            if (decoder->M_CtoV_GF[t][k] == -1) {
+                Stp = k;
                 break;
+            } else {
+                Stp = n_cv;
             }
-            else
-                Stp=n_cv;
         }
-
-        // back to GF symbol and devise
-        for(k=0; k<Stp; k++)
-        {
-            //decoder->M_CtoV_GF[t][k]=table->DIVGF[decoder->M_CtoV_GF[t][k]][code->matValue[node][t]];
-            decoder->M_CtoV_GF[t][k]=table->DIVDEC[decoder->M_CtoV_GF[t][k]][code->matValue[node][t]];
-
+        
+        // GF division
+        for (k = 0; k < Stp; k++) {
+            decoder->M_CtoV_GF[t][k] = table->DIVDEC[decoder->M_CtoV_GF[t][k]][code->matValue[node][t]];
         }
-
-
-
-/// reorder in GF order and add offset
-//printf("sat=%0.3f \n", decoder->M_CtoV_LLR[t][Stp-1] + offset );
-//getchar();
-
-
-        for(k=0; k<code->GF; k++)
-        {
-            LLR_tmp[k] = decoder->M_CtoV_LLR[t][Stp-1] + offset;
+        
+        // Apply offset to all LLR values
+        for (k = 0; k < code->GF; k++) {
+            llr_tmp[k] = decoder->M_CtoV_LLR[t][Stp - 1] + offset;
         }
-
-        for(k=0; k<Stp; k++)
-        {
-            LLR_tmp[decoder->M_CtoV_GF[t][k]]= decoder->M_CtoV_LLR[t][k];
+        
+        // Update specific LLR values
+        for (k = 0; k < Stp; k++) {
+            llr_tmp[decoder->M_CtoV_GF[t][k]] = decoder->M_CtoV_LLR[t][k];
         }
-
-
-        for(k=0; k<code->GF; k++)
-        {
+        
+        // Update all CtoV messages
+        for (k = 0; k < code->GF; k++) {
             decoder->M_CtoV_GF[t][k] = k;
-            decoder->M_CtoV_LLR[t][k] = LLR_tmp[k];
+            decoder->M_CtoV_LLR[t][k] = llr_tmp[k];
         }
-
     }
-
-//    for(g=0; g<code->GF; g++)
-//        {
-//            printf(" GF=%d, LLR=%0.2f \t GF=%d, LLR=%0.2f \t GF=%d, LLR=%0.2f  \n",decoder->M_CtoV_GF[0][g],decoder->M_CtoV_LLR[0][g] ,
-//                    decoder->M_CtoV_GF[1][g],decoder->M_CtoV_LLR[1][g],decoder->M_CtoV_GF[2][g],decoder->M_CtoV_LLR[2][g]);
-//        }
-//        getchar();
-
-
 }
-
-
-
-
-
-
-
-
-
-/**
- * \fn ElementaryStep with x bubbles
- * \brief Elementary bubble check
- */
-int ElementaryStep(float *Input1,float *Input2,int *IndiceInput1,int *IndiceInput2,float *Output,int *IndiceOut,int **ADDGF,int GF,int nbMax,int nbOper)
-{
-
-    int nmU = nbMax;
-    int nmV = nbMax;
-    int nmS = nbMax;
-
-    float loc_Output[nbMax];
-    int loc_IndiceOut[nbMax];
-
-    int  i,j, s, ss, Indice_aux=0;
-    int nb_bubble=8;
-
-    int pos;
-
-    float tab_aux[nbMax][nbMax];
-
-    float tab_comp[3][nb_bubble];
-    int GFvalues_already_in_Out[GF];
-
-    //int debug = 0;
-
-
-//            printf("\n GF in 1 \n");
-//            for(i=0;i<nmU;i++)
-//                {
-//                 printf(" %d",IndiceInput1[i] );
-//
-//                }
-//            printf("\n GF in 2 \n");
-//            for(i=0;i<nmV;i++)
-//                {
-//                 printf(" %d",IndiceInput2[i] );
-//
-//                }
-//                   printf(" \n input1 \n");
-//    for(i=0; i<nbMax; i++)
-//    {
-//        printf(" %f  ",Input1[i]);
-//    }
-//       printf(" \n input2 \n");
-//    for(i=0; i<nbMax; i++)
-//    {
-//        printf(" %f  ",Input2[i]);
-//    }
-//    printf("\n");
-
-
-    // init
-    for (i=0; i<GF; i++)
-    {
-        GFvalues_already_in_Out[i]=-1;
-    }
-
-    for (i=0; i<nbMax; i++)  // if nbOper < number of operations needed to completely fill de nbMax elements of Output, then -1000 and -1 are provided
-    {
-        loc_Output[i] = 1e5;
-        loc_IndiceOut[i] = -1;
-    }
-    for (i=0; i<nmU; i++)
-    {
-        for (j=0; j<nmV; j++)
-        {
-            tab_aux[i][j] = 0;
-        }
-    }
-
-
-// pre-compute the addition of bubble check
-    // horizontal
-    for (j=0; j< nb_bubble>>1; j++)
-    {
-        for (i=0; i< nmU; i++)
-        {
-            tab_aux[i][j] = Input1[i]+Input2[j]; //min-sum algorithm
-
-//            // min-max algorithm
-//            if (Input1[i]>Input2[j])
-//            {
-//             tab_aux[i][j] = Input1[i];
-//            }
-//            else
-//            {
-//            tab_aux[i][j] = Input2[j];
-//            }
-
-
-
-
-        }
-    }
-    // vertical
-     for (i=0; i<nb_bubble>>1; i++)
-    {
-        for (j=nb_bubble>>1; j<nmV; j++)
-        {
-            tab_aux[i][j] = Input1[i]+Input2[j]; // min-sim algorithm
-
-//              //           min-max algorithm
-//            if (Input1[i]>Input2[j])
-//            {
-//             tab_aux[i][j] = Input1[i];
-//            }
-//            else
-//            {
-//            tab_aux[i][j] = Input2[j];
-//            }
-        }
-    }
-
-
-//printf(" nbmax=%d \n",nbMax);
-//    for (i=0; i<nbMax; i++)
-//        {
-//        for (j=0; j<nbMax; j++)
-//            {
-//            printf(" %0.2f \t",tab_aux[i][j]);
-//            }
-//            printf(" \n");
-//        }
-//        getchar();
-
-
-
-
-
-    // tab_comp, comparator matrix, contains the "competitor elements" and their coordinates in "tab_aux"
-    // Initialisation of tab_comp
-
-    //vertical competitors
-    for (j=0; j<nb_bubble/2; j++)
-    {
-        tab_comp[0][j]= tab_aux[j][0];
-        //tab_aux[j][0]=-1;   /* for each element getting from tab_aux to tab_comp, its position in tab_aux becomes -1
-        // This way, we control the problem described in *modified 12/02/2008*/
-        tab_comp[1][j]=j;
-        tab_comp[2][j]=0;
-    }
-
-    //horizontal competitors
-    for (j=0; j<nb_bubble/2; j++)
-    {
-        tab_comp[0][j + nb_bubble/2]= tab_aux[nb_bubble/2][j];
-        tab_comp[1][j + nb_bubble/2]=nb_bubble/2;
-        tab_comp[2][j + nb_bubble/2]=j;
-    }
-
-
-
-
-
-
-
-    // filling Out and IndiceOut
-
-    s = 0;
-
-    for(ss=0; ss < nbOper; ss++)
-    {
-
-//        printf("s=%d; ss= %d \n", s, ss);
-        pos = minimum(tab_comp[0], nb_bubble);
-
-        if ((IndiceInput1[(int)(tab_comp[1][pos])]==-1) || (IndiceInput2[(int)(tab_comp[2][pos])]==-1))
-        {
-
-            printf("\n \n out of bounds : IndiceInput1 = %d , IndiceInput1 = %d \n", IndiceInput1[(int)(tab_comp[1][pos])], IndiceInput2[(int)(tab_comp[2][pos])]);
-
-            break;
-        }
-
-                // bitwise xor operation
-                Indice_aux = IndiceInput1[(int)(tab_comp[1][pos])] ^ IndiceInput2[(int)(tab_comp[2][pos])];
-
-
-        // control redundancy in the output list
-        // transfer from tab_comp to output Out, IndiceOut
-        if (GFvalues_already_in_Out[Indice_aux] == -1)
-        {
-            loc_Output[s] = tab_comp[0][pos];
-            loc_IndiceOut[s] = Indice_aux;
-            GFvalues_already_in_Out[Indice_aux] = 1;
-            s++;
-        }
-
-
-//printf("candiate %d, x=%d, y=%d, llr=%f, GF=%d + %d =%d \n",s,(int)(tab_comp[1][pos]),(int)(tab_comp[2][pos]),
-//       tab_comp[0][pos],IndiceInput1[(int)(tab_comp[1][pos])],IndiceInput2[(int)(tab_comp[2][pos])],Indice_aux  );
-
-        if (s==nmS) break;
-
-
-        //control limits of tab_aux
-        if ((tab_comp[1][pos]>= nmU-1)||(tab_comp[2][pos]>=nmV-1))
-        {
-
-
-        //    printf("\n\n  out of bounds pos=%d, tab_aux: x=%d, y=%d , candidate=%d, output number=%d \n",pos,(int)(tab_comp[1][pos]),(int)(tab_comp[2][pos]),ss,s );
-
-//            for(i=0;i<GF;i++){
-//                    printf("%d",GFvalues_already_in_Out[i]+1);
-//            }
-//            printf("\n GF in 1 \n");
-//            for(i=0;i<nmU;i++)
-//                {
-//                 printf(" %d",IndiceInput1[i] );
-//
-//                }
-//            printf("\n GF in 2 \n");
-//            for(i=0;i<nmV;i++)
-//                {
-//                 printf(" %d",IndiceInput2[i] );
-//
-//                }
-//                   printf(" \n input1 \n");
-//    for(i=0; i<nbMax; i++)
-//    {
-//        printf(" %f  ",Input1[i]);
-//    }
-//       printf(" \n input2 \n");
-//    for(i=0; i<nbMax; i++)
-//    {
-//        printf(" %f  ",Input2[i]);
-//    }
-//
-//
-//getchar();
-
-break;
-
-
-        }
-
-        // update tab_comp with next value from tab_aux
-
-        if (pos > nb_bubble/2-1)
-        {
-            tab_comp[1][pos]=tab_comp[1][pos] + 1;
-        }
-        else
-        {
-            tab_comp[2][pos]=tab_comp[2][pos] + 1;
-        }
-
-        tab_comp[0][pos]= tab_aux[(int)tab_comp[1][pos]][(int)tab_comp[2][pos]];
-
-
-
-
-    }
-
-    for(i=0; i<nbMax; i++)
-    {
-        Output[i]=loc_Output[i];
-        IndiceOut[i]=loc_IndiceOut[i];
-    }
-
-
-
-//    printf("\n input2 \n");
-//   for(i=0; i<nbMax; i++)
-//    {
-//        printf(" %f  ",Input2[i]);
-//    }
-//    printf("\n output \n");
-//    for(i=0; i<nbMax; i++)
-//    {
-//        printf(" %f  ",Output[i]);
-//    }
-//    for(i=0; i<nbMax; i++)
-//    {
-//        printf(" %d  ",IndiceOut[i]);
-//    }
-//    printf(" \n");
-//    getchar();
-
-
-
-
-return(0);
-}
-
-
-
-/**
- * \fn ElementaryStep with x bubbles
- * \brief Elementary bubble check
- */
-int ElementaryStep_nm(float *Input1,float *Input2,int *IndiceInput1,int *IndiceInput2,float *Output,int *IndiceOut,int **ADDGF,int GF,int nmU,int nmV,int nmS,int nbOper)
-{
-    float loc_Output[nmS];
-    int loc_IndiceOut[nmS];
-    int  i,j, s, ss, Indice_aux=0;
-    int nb_bubble=8;
-    int pos;
-    float tab_aux[nmU+1][nmV+1];
-
-    float tab_comp[3][nb_bubble];
-    int GFvalues_already_Out[GF];
-
-
-    // init
-    for (i=0; i<GF; i++)
-    {
-        GFvalues_already_Out[i]=-1;
-    }
-
-    for (i=0; i<nmS; i++)  // if nbOper < number of operations needed to completely fill de nbMax elements of Output, then -1000 and -1 are provided
-    {
-        loc_Output[i] = 1e5;
-        loc_IndiceOut[i] = -1;
-    }
-    for (i=0; i<nmU + 1; i++)
-    {
-        for (j=0; j<nmV + 1; j++)
-        {
-            tab_aux[i][j] = 0;
-        }
-    }
-
-// pre-compute the addition of bubble check
-    // horizontal
-    for (j=0; j< nb_bubble>>1; j++)
-    {
-        for (i=0; i< nmU; i++)
-        {
-            tab_aux[i][j] = Input1[i]+Input2[j]; //min-sum algorithm
-
-//            // min-max algorithm
-//            if (Input1[i]>Input2[j])
-//            {
-//             tab_aux[i][j] = Input1[i];
-//            }
-//            else
-//            {
-//            tab_aux[i][j] = Input2[j];
-//            }
-        }
-        tab_aux[i][j]= 100;
-    }
-    // vertical
-     for (i=0; i<nb_bubble>>1; i++)
-    {
-        for (j=nb_bubble>>1; j<nmV; j++)
-        {
-            tab_aux[i][j] = Input1[i]+Input2[j]; // min-sim algorithm
-//                        // min-max algorithm
-//            if (Input1[i]>Input2[j])
-//            {
-//             tab_aux[i][j] = Input1[i];
-//            }
-//            else
-//            {
-//            tab_aux[i][j] = Input2[j];
-//            }
-        }
-        tab_aux[i][j]= 100;
-    }
-
-
-//    printf(" nmU=%d \n",nmU,nmV);
-//    for (i=0; i<nmU + 1; i++)
-//        {
-//        for (j=0; j<nmV + 1; j++)
-//            {
-//            printf(" %0.2f \t",tab_aux[i][j]);
-//            }
-//            printf(" \n");
-//        }
-//        getchar();
-
-
-
-
-
-    // tab_comp, comparator matrix, contains the "competitor elements" and their coordinates in "tab_aux"
-    // Initialisation of tab_comp
-
-    //vertical competitors
-    for (j=0; j<nb_bubble/2; j++)
-    {
-        tab_comp[0][j]= tab_aux[j][0];
-        //tab_aux[j][0]=-1;   /* for each element getting from tab_aux to tab_comp, its position in tab_aux becomes -1
-        // This way, we control the problem described in *modified 12/02/2008*/
-        tab_comp[1][j]=j;
-        tab_comp[2][j]=0;
-    }
-
-    //horizontal competitors
-    for (j=0; j<nb_bubble/2; j++)
-    {
-        tab_comp[0][j + nb_bubble/2]= tab_aux[nb_bubble/2][j];
-        tab_comp[1][j + nb_bubble/2]=nb_bubble/2;
-        tab_comp[2][j + nb_bubble/2]=j;
-    }
-
-
-    // filling Out and IndiceOut
-
-    s = 0;
-
-    for(ss=0; ss < nbOper; ss++)
-    {
-
-
-        pos = minimum(tab_comp[0], nb_bubble);
-
-//        for (j=0; j<nb_bubble; j++)
-//        {
-//            printf(" %0.2f \t",tab_comp[0][j]);
-//        }
-//        printf("min pos:%d ",pos);
-//        getchar();
-
-
-        if ((IndiceInput1[(int)(tab_comp[1][pos])]==-1) || (IndiceInput2[(int)(tab_comp[2][pos])]==-1))
-        {
-            printf("\n \n out of bounds : IndiceInput1 = %d , IndiceInput1 = %d \n", IndiceInput1[(int)(tab_comp[1][pos])], IndiceInput2[(int)(tab_comp[2][pos])]);
-            break;
-        }
-
-                // bitwise xor operation
-                Indice_aux = IndiceInput1[(int)(tab_comp[1][pos])] ^ IndiceInput2[(int)(tab_comp[2][pos])];
-
-        // control redundancy in the output list
-        // transfer from tab_comp to output Out, IndiceOut
-        if (GFvalues_already_Out[Indice_aux] == -1)
-        {
-
-            loc_Output[s] = tab_comp[0][pos];
-            loc_IndiceOut[s] = Indice_aux;
-            GFvalues_already_Out[Indice_aux] = 1;
-            //printf(" %d GF:%d LLR:%0.2f \n",s, loc_IndiceOut[s], loc_Output[s]);
-            s++;
-        }
-
-
-        if (s==nmS) break;
-
-
-//        //control limits of tab_aux
-//        if ((tab_comp[1][pos]>= nmU-1)||(tab_comp[2][pos]>=nmV-1))
-//        {
-//            printf("\n\n  out of bounds pos=%d, tab_aux: x=%d, y=%d , candidate=%d, output number=%d \n",pos,(int)(tab_comp[1][pos]),(int)(tab_comp[2][pos]),ss,s );
-//        //break;
-//        }
-
-
-
-        // update tab_comp with next value from tab_aux
-
-        if (pos > nb_bubble/2-1)
-        {
-            tab_comp[1][pos]=tab_comp[1][pos] + 1;
-        }
-        else
-        {
-            tab_comp[2][pos]=tab_comp[2][pos] + 1;
-        }
-
-        tab_comp[0][pos]= tab_aux[(int)tab_comp[1][pos]][(int)tab_comp[2][pos]];
-
-
-    }
-
-    for(i=0; i<nmS; i++)
-    {
-        Output[i]=loc_Output[i];
-        IndiceOut[i]=loc_IndiceOut[i];
-    }
-
-
-//    printf("\n output \n");
-//    for(i=0; i<nmS; i++)
-//    {
-//        printf("GF:%d  LLR:%0.2f  \n",IndiceOut[i], Output[i]);
-//    }
-//    getchar();
-
-
-return(0);
-}
-
-
-
