@@ -87,6 +87,7 @@ int main(int argc, char * argv[])
         printf("File:\n %s\n ", argv[0]);
         //printf usage_txt of type: static char usage_txt[]
         printf("%s", usage_txt);
+
         return (EXIT_FAILURE);
     }
     outputFileName = malloc(STR_MAXSIZE);
