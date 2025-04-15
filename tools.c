@@ -1,10 +1,6 @@
 /*!
  * \file tools.c
  * \brief tools for NB decoder
- * \author C.Marchand, A. Al-Ghouwahel, Oussama Abassi, L. Conde-Canencia, A. abdmoulah, E. Boutillon
- * \copyright BSD copyright
- * \date 03/03/2015
-
 
  */
 
@@ -17,25 +13,10 @@
 
 
 
-
-
-
-
-
-//// random generator: uniform distribution on [0,1]
-//float My_drand48 (void)
-//{
-//    return((float)(rand())/(float)(RAND_MAX+1.0));
-//}
-
-
-// random generator: uniform distribution on [0,1]
-
 /*!
 * \fn My_drand48
 * \brief improved randum number generator working for linux and windows
 * return an uniformely distributed random number, for windows to replace drand48 of linux
-* \author C. Marchand
 *******************************************************************************/
 float My_drand48(int *initialise)
 {
@@ -99,6 +80,17 @@ int Bin2GF(int *U,int GF,int logGF,int **BINGF)
     for (k=0; k<GF; k++)
     {
         if (memcmp(U,BINGF[k],sizeof(int)*logGF)==0) break;
+    }
+    // //print U and corresponding k
+    // printf("Bin2GF: ");
+    // for (int i=0; i<logGF; i++)
+    //     printf("%d",U[i]);
+    // printf(" => %d \n",k);
+    // fflush(stdout);
+    if (k==GF)
+    {
+        printf("Error in Bin2GF: no corresponding symbol found\n");
+        exit(EXIT_FAILURE);
     }
     return(k);
 }

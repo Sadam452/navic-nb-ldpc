@@ -27,7 +27,7 @@ Frame Error Rate (FER) and Bit Error Rate (BER) and average number of iterations
 ## Simulation on Linux
 
 > make
-> ./essai 2000 10 ./matrices/KN/N576_K480_GF64.txt 3.5 20 20 0.3 25
+> ./navic 2000 10 ./matrices/KN/N92_K46_GF64_navic.txt 3.5 20 20 0.3 25
 
 ## Simulation results
 

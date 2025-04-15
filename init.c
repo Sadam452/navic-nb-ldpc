@@ -20,7 +20,7 @@
 #include "./include/tools.h"
 
 
-#define STR_MAXSIZE 350    //la taille maximale permise pour les chaines de caractères. Utilisée dans la fonction calloc().
+#define STR_MAXSIZE 350    //la taille maximale permise pour les chaines de caractï¿½res. Utilisï¿½e dans la fonction calloc().
 
 #define KN_matrix
 
@@ -295,30 +295,6 @@ void LoadCode (char *FileMatrix, code_t *code)
     }
 
 
-#ifndef KN_matrix
-printf(" \n UBS alist format is used! \n");
-int temp_int;
-    for (m=0; m<M; m++)
-        for (k=0; k<code->rowDegree[m]; k++)
-            fscanf(f,"%d",&code->mat[m][k]);
-
-
-
-    for (m=0; m<M; m++)
-    {
-        for (k=0; k<code->rowDegree[m]; k++)
-        {
-            fscanf(f,"%d",&temp_int);
-            code->matValue[m][k]=temp_int;
-            //code->matValue[m][k] = BinSymbol_dec_32[temp_int];
-        }
-    }
-
-
-#endif
-
-
-
 #ifdef KN_matrix
 printf(" \n Normal alist format is used! \n");
     int temp_int;
@@ -538,9 +514,9 @@ void LoadTables (table_t *table, int GF, int logGF)
 {
     int nbRow, nbCol, g,k,l;
 
-    if(GF!=16 && GF!=32 && GF!=64 && GF!=256 && GF!=4096)
+    if(GF!=64)
     {
-        printf("The binary image of GF(%d) is not available in this version of the program. Please try GF(64) or GF(256)\n",GF);
+        printf("The binary image of GF(%d) is not available in this version of the program. Please try GF(64)\n",GF);
         exit(EXIT_FAILURE);
     }
 
@@ -591,25 +567,6 @@ void LoadTables (table_t *table, int GF, int logGF)
     table->DIVDEC [0] = calloc((size_t)nbRow*nbCol,sizeof(int));
     for (k=1; k<nbRow; k++) table->DIVDEC[k] = table->DIVDEC[0] + k*nbCol;
 
-    if(GF==16)
-    {
-        for(g=0; g<GF; g++)
-            for(l=0; l<logGF; l++)
-                table->BINGF[g][l] = BinGF_16[g][l];
-        //printf("Loading of the binary image of GF(64): Success\n");
-        //fflush(stdout);
-    }
-
-
-    if(GF==32)
-    {
-        for(g=0; g<GF; g++)
-            for(l=0; l<logGF; l++)
-                table->BINGF[g][l] = BinGF_32[g][l];
-        //printf("Loading of the binary image of GF(64): Success\n");
-        //fflush(stdout);
-    }
-
     if(GF==64)
     {
         for(g=0; g<GF; g++)
@@ -618,24 +575,10 @@ void LoadTables (table_t *table, int GF, int logGF)
         //printf("Loading of the binary image of GF(64): Success\n");
         //fflush(stdout);
     }
-
-    if(GF==256)
+    else
     {
-        for(g=0; g<GF; g++)
-            for(l=0; l<logGF; l++)
-                table->BINGF[g][l] = BinGF_256[g][l];
-        //printf("Loading of the binary image of GF(256): Success\n");
-        //fflush(stdout);
-    }
-
-
-    if(GF==4096)
-    {
-        for(g=0; g<GF; g++)
-            for(l=0; l<logGF; l++)
-                table->BINGF[g][l] = BinGF_4096[g][l];
-        //printf("Loading of the binary image of GF(256): Success\n");
-        //fflush(stdout);
+        printf("The binary image of GF(%d) is not available in this version of the program. Please try GF(64)\n",GF);
+        exit(EXIT_FAILURE);
     }
 
 

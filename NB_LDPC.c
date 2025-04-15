@@ -124,7 +124,8 @@ int main(int argc, char * argv[])
     fclose(file);
 
 
-    printf("Load code  ... ");
+    printf("Load H & Initialize coding str  ... ");
+    //init.c
     LoadCode(matrixFileName, &code);
     printf(" OK \n Load table ...");
     LoadTables(&table, code.GF, code.logGF);

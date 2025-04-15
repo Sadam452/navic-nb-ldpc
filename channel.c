@@ -754,187 +754,187 @@ som=pos_gf_to_bin[k];
 }
 
 
-void ModelChannel_AWGN_256QAM_4D(code_t *code, decoder_t *decoder, int **NBIN, float EbN, int *init_rand)
-{
-    const int N = code->N;
-    int n,k,g,q;
-    float u,v,sigma;
-    float TMP[256];
-    int som;
-    float **NoisyBin = calloc(N,sizeof(float *));
-    for (n=0; n<N; n++) NoisyBin[n] = calloc(4,sizeof(float));
-    /* Binary-input AWGN channel : */
-    int i;
+// void ModelChannel_AWGN_256QAM_4D(code_t *code, decoder_t *decoder, int **NBIN, float EbN, int *init_rand)
+// {
+//     const int N = code->N;
+//     int n,k,g,q;
+//     float u,v,sigma;
+//     float TMP[256];
+//     int som;
+//     float **NoisyBin = calloc(N,sizeof(float *));
+//     for (n=0; n<N; n++) NoisyBin[n] = calloc(4,sizeof(float));
+//     /* Binary-input AWGN channel : */
+//     int i;
 
-    float table_256[256][4];
-
-
-
-
-// Signal Space Diversity
-    float attenuation[N][4];
-   float attenuation_temp;
-    float rand_temp;
-#ifdef erasure
-float erasure_proba=0.1;
-#endif // erasure
-
-
-////compute normalization factor so that average power of one point of constellation is equal to one
-    float norm_factor=0.0;
-    for(i=0; i < code->GF ; i++)
-    {
-//        table_256[i][0]=table_256QAM_4D_16QAM[i][0];
-//        table_256[i][1]=table_256QAM_4D_16QAM[i][1];
-//        table_256[i][2]=table_256QAM_4D_16QAM[i][2];
-//        table_256[i][3]=table_256QAM_4D_16QAM[i][3];
-
-        table_256[i][0]=table_256QAM_4D_16QAM_R[i][0];
-        table_256[i][1]=table_256QAM_4D_16QAM_R[i][1];
-        table_256[i][2]=table_256QAM_4D_16QAM_R[i][2];
-        table_256[i][3]=table_256QAM_4D_16QAM_R[i][3];
-
-
-//        table_256[i][0]=table_256QAM_4D[i][0];
-//        table_256[i][1]=table_256QAM_4D[i][1];
-//        table_256[i][2]=table_256QAM_4D[i][2];
-//        table_256[i][3]=table_256QAM_4D[i][3];
-
-    }
-
-    for(i=0; i < code->GF ; i++)
-    {
-        norm_factor = table_256[i][0]*table_256[i][0] + table_256[i][1]*table_256[i][1]+norm_factor;//compute sum
-        norm_factor = table_256[i][2]*table_256[i][2] + table_256[i][3]*table_256[i][3]+norm_factor;//compute sum
-    }
-    norm_factor = sqrt(2* code->GF / norm_factor);
-//printf(" norm_factor = %f ", norm_factor); getchar();
-
-    for(i=0; i< code->GF ; i++)
-    {
-        table_256[i][0]=norm_factor*table_256[i][0];
-        table_256[i][1]=norm_factor*table_256[i][1];
-        table_256[i][2]=norm_factor*table_256[i][2];
-        table_256[i][3]=norm_factor*table_256[i][3];
-    }
-
-    sigma = sqrt(1.0/(2*pow(10,EbN/10.0)));  //SNR
-
-    //sigma = sqrt(1.0/(2*code->rate * code->logGF * pow(10,EbN/10.0)));  //Eb/No
-
-    //printf("sigma = %f \n",sigma);getchar();
-
-
-    for (n=0; n<N; n++)
-    {
-        som=0;
-
-
-        for (q=0; q<8; q++)
-        {
-            som = som + NBIN[n][q]*pow(2,q);
-        }
-        //printf("\n %d \n",som );
-
-        for (q=0; q<4; q++)
-        {
-            u=My_drand48(init_rand);
-            v=My_drand48(init_rand);
-
-
-            rand_temp=My_drand48(init_rand);
-            attenuation_temp=sqrt(-log(rand_temp));
-attenuation[n][q]=attenuation_temp;
-NoisyBin[n][q] = table_256[som][q]*attenuation_temp+ sigma*sqrt(-2.0*log(u))*cos(2.0*PI*v)  ;
-
-
-
-#ifdef erasure
-
-rand_temp = My_drand48(init_rand);
-
-//printf("rand: %f , attenuation1: %f",rand_temp,attenuation_temp);
-if (rand_temp< erasure_proba)
-{
-    attenuation_temp=0.0;
-}
-else
-{
-attenuation_temp=attenuation_temp/sqrt(1-erasure_proba);
-}
-
-attenuation[n][q]=attenuation_temp;
-
-#endif // erasure
+//     float table_256[256][4];
 
 
 
 
-
-        }
-        //printf("%f %f %f %f \n",NoisyBin[n][0], table_256[som][0] , NoisyBin[n][1] , table_256[som][1]);getchar();
-    }
-
-    /* Compute the Log intrinsic_LLR Ratio messages */
-    for (n=0; n<N; n++)
-    {
-
-
-        //printf("%d \n",code->GF);getchar();
-        for(k=0; k<code->GF; k++)
-        {
-            som=0;
-            for (q=0; q<8; q++)
-            {
-                som = som + BinGF_256[k][q]*pow(2,q);
-            }
+// // Signal Space Diversity
+//     float attenuation[N][4];
+//    float attenuation_temp;
+//     float rand_temp;
+// #ifdef erasure
+// float erasure_proba=0.1;
+// #endif // erasure
 
 
-            TMP[k]=0;
-            if(attenuation[n][0]>0 )
-            {
-                TMP[k] =         SQR(NoisyBin[n][0]-attenuation[n][0]*table_256[som][0])/(2.0*SQR(sigma));
-            }
+// ////compute normalization factor so that average power of one point of constellation is equal to one
+//     float norm_factor=0.0;
+//     for(i=0; i < code->GF ; i++)
+//     {
+// //        table_256[i][0]=table_256QAM_4D_16QAM[i][0];
+// //        table_256[i][1]=table_256QAM_4D_16QAM[i][1];
+// //        table_256[i][2]=table_256QAM_4D_16QAM[i][2];
+// //        table_256[i][3]=table_256QAM_4D_16QAM[i][3];
 
-            if(attenuation[n][1]>0 )
-            {
-                TMP[k] = TMP[k] +SQR(NoisyBin[n][1]-attenuation[n][1]*table_256[som][1])/(2.0*SQR(sigma));
-            }
-
-            if(attenuation[n][2]>0 )
-            {
-                TMP[k] = TMP[k] +SQR(NoisyBin[n][2]-attenuation[n][2]*table_256[som][2])/(2.0*SQR(sigma));
-            }
-
-            if(attenuation[n][3]>0 )
-            {
-                TMP[k] = TMP[k] +SQR(NoisyBin[n][3]-attenuation[n][3]*table_256[som][3])/(2.0*SQR(sigma));
-            }
+//         table_256[i][0]=table_256QAM_4D_16QAM_R[i][0];
+//         table_256[i][1]=table_256QAM_4D_16QAM_R[i][1];
+//         table_256[i][2]=table_256QAM_4D_16QAM_R[i][2];
+//         table_256[i][3]=table_256QAM_4D_16QAM_R[i][3];
 
 
-            //printf("%f \n", TMP[k]);
-        }
-        //getchar();
-        for(k=0; k<code->GF; k++)
-        {
-            decoder->intrinsic_LLR[n][k] = +1e5;
-            decoder->intrinsic_GF[n][k] = -1;
-            for (g=0; g<code->GF; g++)
-            {
-                if (TMP[g] < decoder->intrinsic_LLR[n][k])
-                {
-                    decoder->intrinsic_LLR[n][k] = TMP[g];
-                    decoder->intrinsic_GF[n][k] = g;
-                }
-            }
-            TMP[decoder->intrinsic_GF[n][k]] = +1e5;
-        }
+// //        table_256[i][0]=table_256QAM_4D[i][0];
+// //        table_256[i][1]=table_256QAM_4D[i][1];
+// //        table_256[i][2]=table_256QAM_4D[i][2];
+// //        table_256[i][3]=table_256QAM_4D[i][3];
 
-    }
+//     }
 
-    for (n=0; n<N; n++) free(NoisyBin[n]);
-    free(NoisyBin);
-}
+//     for(i=0; i < code->GF ; i++)
+//     {
+//         norm_factor = table_256[i][0]*table_256[i][0] + table_256[i][1]*table_256[i][1]+norm_factor;//compute sum
+//         norm_factor = table_256[i][2]*table_256[i][2] + table_256[i][3]*table_256[i][3]+norm_factor;//compute sum
+//     }
+//     norm_factor = sqrt(2* code->GF / norm_factor);
+// //printf(" norm_factor = %f ", norm_factor); getchar();
+
+//     for(i=0; i< code->GF ; i++)
+//     {
+//         table_256[i][0]=norm_factor*table_256[i][0];
+//         table_256[i][1]=norm_factor*table_256[i][1];
+//         table_256[i][2]=norm_factor*table_256[i][2];
+//         table_256[i][3]=norm_factor*table_256[i][3];
+//     }
+
+//     sigma = sqrt(1.0/(2*pow(10,EbN/10.0)));  //SNR
+
+//     //sigma = sqrt(1.0/(2*code->rate * code->logGF * pow(10,EbN/10.0)));  //Eb/No
+
+//     //printf("sigma = %f \n",sigma);getchar();
+
+
+//     for (n=0; n<N; n++)
+//     {
+//         som=0;
+
+
+//         for (q=0; q<8; q++)
+//         {
+//             som = som + NBIN[n][q]*pow(2,q);
+//         }
+//         //printf("\n %d \n",som );
+
+//         for (q=0; q<4; q++)
+//         {
+//             u=My_drand48(init_rand);
+//             v=My_drand48(init_rand);
+
+
+//             rand_temp=My_drand48(init_rand);
+//             attenuation_temp=sqrt(-log(rand_temp));
+// attenuation[n][q]=attenuation_temp;
+// NoisyBin[n][q] = table_256[som][q]*attenuation_temp+ sigma*sqrt(-2.0*log(u))*cos(2.0*PI*v)  ;
+
+
+
+// #ifdef erasure
+
+// rand_temp = My_drand48(init_rand);
+
+// //printf("rand: %f , attenuation1: %f",rand_temp,attenuation_temp);
+// if (rand_temp< erasure_proba)
+// {
+//     attenuation_temp=0.0;
+// }
+// else
+// {
+// attenuation_temp=attenuation_temp/sqrt(1-erasure_proba);
+// }
+
+// attenuation[n][q]=attenuation_temp;
+
+// #endif // erasure
+
+
+
+
+
+//         }
+//         //printf("%f %f %f %f \n",NoisyBin[n][0], table_256[som][0] , NoisyBin[n][1] , table_256[som][1]);getchar();
+//     }
+
+//     /* Compute the Log intrinsic_LLR Ratio messages */
+//     for (n=0; n<N; n++)
+//     {
+
+
+//         //printf("%d \n",code->GF);getchar();
+//         for(k=0; k<code->GF; k++)
+//         {
+//             som=0;
+//             for (q=0; q<8; q++)
+//             {
+//                 som = som + BinGF_256[k][q]*pow(2,q);
+//             }
+
+
+//             TMP[k]=0;
+//             if(attenuation[n][0]>0 )
+//             {
+//                 TMP[k] =         SQR(NoisyBin[n][0]-attenuation[n][0]*table_256[som][0])/(2.0*SQR(sigma));
+//             }
+
+//             if(attenuation[n][1]>0 )
+//             {
+//                 TMP[k] = TMP[k] +SQR(NoisyBin[n][1]-attenuation[n][1]*table_256[som][1])/(2.0*SQR(sigma));
+//             }
+
+//             if(attenuation[n][2]>0 )
+//             {
+//                 TMP[k] = TMP[k] +SQR(NoisyBin[n][2]-attenuation[n][2]*table_256[som][2])/(2.0*SQR(sigma));
+//             }
+
+//             if(attenuation[n][3]>0 )
+//             {
+//                 TMP[k] = TMP[k] +SQR(NoisyBin[n][3]-attenuation[n][3]*table_256[som][3])/(2.0*SQR(sigma));
+//             }
+
+
+//             //printf("%f \n", TMP[k]);
+//         }
+//         //getchar();
+//         for(k=0; k<code->GF; k++)
+//         {
+//             decoder->intrinsic_LLR[n][k] = +1e5;
+//             decoder->intrinsic_GF[n][k] = -1;
+//             for (g=0; g<code->GF; g++)
+//             {
+//                 if (TMP[g] < decoder->intrinsic_LLR[n][k])
+//                 {
+//                     decoder->intrinsic_LLR[n][k] = TMP[g];
+//                     decoder->intrinsic_GF[n][k] = g;
+//                 }
+//             }
+//             TMP[decoder->intrinsic_GF[n][k]] = +1e5;
+//         }
+
+//     }
+
+//     for (n=0; n<N; n++) free(NoisyBin[n]);
+//     free(NoisyBin);
+// }
 
 void build_QAM_table(int logGF)
 {
