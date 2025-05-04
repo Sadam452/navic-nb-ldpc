@@ -131,118 +131,105 @@ void RandomBinaryGenerator (int N, int M,int GF,int logGF, int **KBIN, int *KSYM
 /**
  * \fn GaussianElimination
  * \brief Perform a Gaussian elimination on the parity-check matrix.
- * 		   The procedure stops when the
- * 		   The redundancy symbols are initialized to 0.
- * Inputs
- * 	- code->mat   : parity-check matrix
- * 	- table       : lookup tables for computations in GF(q)
- * Outputs       :
- *      - code->matUT : Upper triangular matrix used for encoding
- *      - code->Perm : Column permutation
+ *        The procedure stops if the matrix is not full-rank.
+ *        The redundancy symbols are initialized to 0.
+ * 
+ * Inputs:
+ *   - code->mat     : Sparse parity-check matrix
+ *   - code->matValue: Values in GF(q) corresponding to positions in mat
+ *   - table         : Lookup tables for computations in GF(q)
+ * 
+ * Outputs:
+ *   - code->matUT   : Dense Upper Triangular matrix used for encoding
+ *   - code->Perm    : Column permutation array
  */
-void GaussianElimination (code_t *code, table_t *table)
+
+void GaussianElimination(code_t *code, table_t *table)
 {
     const int N = code->N;
     const int M = code->M;
-    int n,m,k,m1,ind, buf;
-    int temp[12];
-    int i;
+    int m, m1, n, k, ind, buf, i;
+    int temp[12]; // for binary representation in GF
 
-    code->matUT = calloc((size_t)M,sizeof(int *));
-    code->matUT [0] = calloc((size_t)M*N,sizeof(int));
-    for (k=1; k<M; k++) code->matUT[k] = code->matUT[0] + k*N;
+    // Allocate memory for upper triangular matrix (contiguous allocation)
+    code->matUT = calloc(M, sizeof(int *));
+    code->matUT[0] = calloc(M * N, sizeof(int));
+    for (k = 1; k < M; k++) 
+        code->matUT[k] = code->matUT[0] + k * N;
 
-    code->Perm 	= calloc(N,sizeof(int));
+    // Initialize column permutation
+    code->Perm = calloc(N, sizeof(int));
+    for (n = 0; n < N; n++)
+        code->Perm[n] = n;
 
-    for (n=0; n<N; n++) code->Perm[n] = n;
-
-    for (m=0; m<M; m++)
-    {
-        for (k=0; k<code->rowDegree[m]; k++)
-        {
-            code->matUT[m][code->mat[m][k]] = code->matValue[m][k];
+    // Convert sparse matrix to dense form
+    for (m = 0; m < M; m++) {
+        for (k = 0; k < code->rowDegree[m]; k++) {
+            int col = code->mat[m][k];
+            code->matUT[m][col] = code->matValue[m][k];
         }
     }
-    /*
-    printf("\n mat UT start \n");
-        for (m=0; m<M; m++)
-        {
-            for (k=0; k<code->N; k++)
-            {
-                printf("%d ",code->matUT[m][k] );
-            }
-            printf("\n");
-        }
-    getchar();*/
 
-    for (m=0; m<M; m++)
-    {
-        for (ind=N-m-1; ind>-1; ind--)
-        {
-            if (code->matUT[m][ind]!=0) break;
+    // Gaussian elimination process
+    for (m = 0; m < M; m++) {
+        // Find pivot from rightmost non-zero column
+        for (ind = N - m - 1; ind >= 0; ind--) {
+            if (code->matUT[m][ind] != 0)
+                break;
         }
-        if (ind==0)
-        {
-            printf("The matrix is not full rank (%d,%d)\n",m,ind);
+
+        // If no pivot found (rank-deficient matrix)
+        if (ind == 0) {
+            printf("The matrix is not full rank (%d,%d)\n", m, ind);
             exit(EXIT_FAILURE);
         }
 
-        // permute ind column with m column
-        buf = code->Perm[ind];
-        code->Perm[ind] = code->Perm[N-m-1];
-        code->Perm[N-m-1] = buf;
-        for (m1=0; m1<M; m1++)
-        {
-            buf = code->matUT[m1][N-m-1];
-            code->matUT[m1][N-m-1] = code->matUT[m1][ind];
-            code->matUT[m1][ind] = buf;
+        // Swap columns: ind <-> N - m - 1 in Perm and matUT
+        int col1 = ind;
+        int col2 = N - m - 1;
+
+        // Update permutation
+        buf = code->Perm[col1];
+        code->Perm[col1] = code->Perm[col2];
+        code->Perm[col2] = buf;
+
+        // Swap actual columns in the matrix
+        for (m1 = 0; m1 < M; m1++) {
+            buf = code->matUT[m1][col2];
+            code->matUT[m1][col2] = code->matUT[m1][col1];
+            code->matUT[m1][col1] = buf;
         }
 
-        
-        // put zero at column N-m, from line m1 = m+1 to M
-        for (m1=m+1; m1<M; m1++)
-        {
-            if (code->matUT[m1][N-m-1]!=0)
-            {
-                // update line m1
-                buf=code->matUT[m1][N-m-1];
-                for (n=0; n<N-m; n++)
-                {
-                    if (code->matUT[m1][n]!=0)
-                        code->matUT[m1][n] = table->DIVGF[code->matUT[m1][n]][buf];
-                }
-                for (n=0; n<N-m; n++)
-                {
-                    if (code->matUT[m1][n]!=0)
-                        code->matUT[m1][n] = table->MULGF[code->matUT[m1][n]][code->matUT[m][N-m-1]];
-                }
-                for (n=0; n<N-m; n++)
-                {
-                    for(i=0; i<code->logGF; i++)
-                    {
-                        temp[i] = (table->BINGF[code->matUT[m1][n]][i])^(table->BINGF[code->matUT[m][n]][i]);
-                    }
-                    code->matUT[m1][n] = Bin2GF(temp,code->GF,code->logGF,table->BINGF);
+        // Eliminate below pivot (column col2) from row m+1 to M
+        for (m1 = m + 1; m1 < M; m1++) {
+            if (code->matUT[m1][col2] == 0) continue;
 
-                    //code->matUT[m1][n] = table->ADDGF[code->matUT[m1][n]][code->matUT[m][n]];
+            int pivotVal = code->matUT[m1][col2];
+
+            // Normalize the row by dividing by pivotVal
+            for (n = 0; n < N - m; n++) {
+                if (code->matUT[m1][n])
+                    code->matUT[m1][n] = table->DIVGF[code->matUT[m1][n]][pivotVal];
+            }
+
+            // Multiply by matUT[m][col2] (pivot row's leading value)
+            for (n = 0; n < N - m; n++) {
+                if (code->matUT[m1][n])
+                    code->matUT[m1][n] = table->MULGF[code->matUT[m1][n]][code->matUT[m][col2]];
+            }
+
+            // Subtract scaled pivot row from current row (XOR in binary)
+            for (n = 0; n < N - m; n++) {
+                for (i = 0; i < code->logGF; i++) {
+                    temp[i] = table->BINGF[code->matUT[m1][n]][i] ^
+                              table->BINGF[code->matUT[m][n]][i];
                 }
+                code->matUT[m1][n] = Bin2GF(temp, code->GF, code->logGF, table->BINGF);
             }
         }
     }
-    /*
-    printf("\n mat UT constructed \n");
-        for (m=0; m<M; m++)
-        {
-            for (k=0; k<code->N; k++)
-            {
-                printf("%d ",code->matUT[m][k] );
-            }
-            printf("\n");
-        }
-    getchar();*/
-
-
 }
+
 
 
 /**

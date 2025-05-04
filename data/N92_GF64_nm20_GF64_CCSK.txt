@@ -5,3 +5,16 @@
  SNR:3.50: 	 FER= 0 / 2001 = 0.000000  	 BER= 0 / x = 	 0.000000  avr_it= 	 1.83 	 time: Thu Mar 20 16:54:09 2025
  SNR:3.50: 	 FER= 0 / 2001 = 0.000000  	 BER= 0 / x = 	 0.000000  avr_it= 	 1.83 	 time: Thu Mar 20 16:59:31 2025
  SNR:3.50: 	 FER= 0 / 2001 = 0.000000  	 BER= 0 / x = 	 0.000000  avr_it= 	 1.83 	 time: Wed Apr  9 20:07:07 2025
+ SNR:0.00: 	 FER= 1947 / 2001 = 0.973013  	 BER= 80461 / x = 	 0.145690  avr_it= 	 9.91 	 time: Tue Apr 29 19:28:52 2025
+ SNR:0.50: 	 FER= 1645 / 2001 = 0.822089  	 BER= 53769 / x = 	 0.097359  avr_it= 	 9.30 	 time: Tue Apr 29 19:29:30 2025
+ SNR:1.00: 	 FER= 871 / 2001 = 0.435282  	 BER= 22727 / x = 	 0.041152  avr_it= 	 7.44 	 time: Tue Apr 29 19:29:58 2025
+ SNR:1.50: 	 FER= 231 / 2001 = 0.115442  	 BER= 4648 / x = 	 0.008416  avr_it= 	 4.96 	 time: Tue Apr 29 19:30:34 2025
+ SNR:2.00: 	 FER= 19 / 2001 = 0.009495  	 BER= 334 / x = 	 0.000605  avr_it= 	 3.32 	 time: Tue Apr 29 19:31:00 2025
+ SNR:2.50: 	 FER= 1 / 2001 = 0.000500  	 BER= 5 / x = 	 0.000009  avr_it= 	 2.53 	 time: Tue Apr 29 19:31:29 2025
+ SNR:3.00: 	 FER= 0 / 2001 = 0.000000  	 BER= 0 / x = 	 0.000000  avr_it= 	 2.11 	 time: Tue Apr 29 19:31:55 2025
+ SNR:3.50: 	 FER= 0 / 2001 = 0.000000  	 BER= 0 / x = 	 0.000000  avr_it= 	 1.83 	 time: Tue Apr 29 19:32:12 2025
+ SNR:2.50: 	 FER= 1 / 2001 = 0.000500  	 BER= 5 / x = 	 0.000009  avr_it= 	 2.53 	 time: Mon May  5 01:29:07 2025
+ SNR:3.50: 	 FER= 0 / 2001 = 0.000000  	 BER= 0 / x = 	 0.000000  avr_it= 	 1.83 	 time: Mon May  5 01:36:00 2025
+ SNR:3.50: 	 FER= 0 / 2001 = 0.000000  	 BER= 0 / x = 	 0.000000  avr_it= 	 1.83 	 time: Mon May  5 01:40:27 2025
+ SNR:3.50: 	 FER= 0 / 2001 = 0.000000  	 BER= 0 / x = 	 0.000000  avr_it= 	 1.83 	 time: Mon May  5 01:44:14 2025
+ SNR:3.50: 	 FER= 0 / 2001 = 0.000000  	 BER= 0 / x = 	 0.000000  avr_it= 	 1.83 	 time: Mon May  5 01:51:08 2025

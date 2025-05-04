@@ -15,7 +15,7 @@
 #include "channel.h"
 #include "syndrome_decoder.h"
 #include "bubble_decoder.h"
-#include "csk.h"
+// #include "csk.h"
 
 
 static char usage_txt[] =

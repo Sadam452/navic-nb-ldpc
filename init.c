@@ -307,55 +307,17 @@ printf(" \n Normal alist format is used! \n");
             fscanf(f,"%d",&temp_int);
             code->matValue[m][k]=temp_int+1;
         }
-
     }
-
-
 #endif
-
-
-
-
-
-
-
     fclose(f);
 
     code->nbBranch=0;
     for (m=0; m<M; m++) code->nbBranch += code->rowDegree[m];
 
-//printf(" \n ");
-//for (m=0; m<M; m++)
-//{
-//        for (k=0; k<code->rowDegree[m]; k++)
-//        {
-//            printf(" %d ",code->mat[m][k]);
-//        }
-//        printf(" \n ");
-//
-//}
-//getchar();
-//
-//printf(" \n ");
-//for (m=0; m<M; m++)
-//{
-//        for (k=0; k<code->rowDegree[m]; k++)
-//        {
-//            printf(" %d ",code->matValue[m][k]);
-//        }
-//        printf(" \n ");
-//
-//}
-//getchar();
-
-
-
-
     printf("LDPC code parameters: \n");
     printf(" \t N \t:%d \n \t K \t:%d \n \t M\t:%d \n \t CR\t:%g \n \t GF \t:%d \n \t logGF \t:%d\n",N,N-M,M,code->rate,GF,logGF);
     fflush(stdout);
     free(FileName);
-
 }
 
 

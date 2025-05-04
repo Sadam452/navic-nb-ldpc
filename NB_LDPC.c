@@ -1,6 +1,6 @@
 /*!
  * \file NB_LDPC.c
- * \brief Non-binary LDPC reduced complexity decoder with horizontal scheduling
+ * \brief Non-binary LDPC reduced complexity decoder with horizontal scheduling -- Main file
  * \author Sadam Hussein
  * \copyright BSD copyright
  * \date 03/03/2015
@@ -113,6 +113,8 @@ int main(int argc, char * argv[])
     printf("\n\t n_cv            : %d", decoder.n_cv);
     printf("\n\t Offset           : %g", offsetFactor);
     printf("\n\t NbOper           : %d\n", maxOperations);
+    printf("\nStart simulation?\n");
+    getchar();
 
     //check if FileMatrix exists
     FILE *file;
@@ -132,6 +134,7 @@ int main(int argc, char * argv[])
     printf("OK \n Allocate decoder ... ");
     AllocateDecoder(&code, &decoder);
     printf("OK \n Gaussian Elimination ... ");
+    //tools.c
     GaussianElimination(&code, &table);
     printf(" OK \n");
 
@@ -211,12 +214,8 @@ int main(int argc, char * argv[])
         Encoding(&code, &table, codeWord, codeBits, infoSymbols);
 
         /* Noisy channel (AWGN) */
-        #ifdef CCSK
-        ModelChannel_AWGN_BPSK_CSK(&csk, &code, &decoder, &table, codeWord, snrValue, &randomSeed);
-        #endif
-        #ifndef CCSK
+        //this will be used in our case to simulate the noise channel
         ModelChannel_AWGN_BPSK(&code, &decoder, &table, codeBits, snrValue, &randomSeed);
-        #endif
 
         /***********************************************/
         /* Implementation of the horizontal scheduling */
@@ -318,8 +317,8 @@ int main(int argc, char * argv[])
             fflush(stdout);
         }
 
-        if (numFrameErrors == 40)
-            break;
+        // if (numFrameErrors == 40)
+        //     break;
     }
 
     printf("\r<%d> FER= %d / %d = %f BER= %d / x = %f  avr_it=%.2f",

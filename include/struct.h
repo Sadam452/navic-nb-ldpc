@@ -3,27 +3,27 @@
 
 /*!
  * \file struct.h
- * \brief header for structures
+ * \brief Header for data structures used in LDPC decoding
  */
 
 //! \struct GF_element
-typedef struct
-{
+//! \brief Represents an element in GF(q) with corresponding LLR
+typedef struct {
     int GF;
     float LLR;
 } GF_element;
 
 //! \struct syndrome_type
-typedef struct
-{
+//! \brief Represents a syndrome value with configuration info
+typedef struct {
     int GF;
     float LLR;
-    int config; //config number
+    int config; // Configuration number
 } syndrome_type;
 
 //! \struct GF_syndrome_type
-typedef struct
-{
+//! \brief Used in the decoding process to store minimum LLRs and their indices
+typedef struct {
     float min1;
     float min2;
     float min3;
@@ -34,90 +34,78 @@ typedef struct
     float LLR;
 } GF_syndrome_type;
 
+/**********************************************************/
+/**************** LDPC Code Parameters Description ********/
+/**********************************************************/
 
-
-/******************************************************/
-/****************** LDPC code description**************/
-/******************************************************/
-/*! \struct code_t
-*  \brief LDPC code parameters
-* The parity-check matrix has a sparse description.
-* ce type contient les param�tres du code LDPC consid�r�. Ces param�tres sont collect�s depuis un fichier texte contenant la matrice
-* de parit� du code.
-*/
-typedef struct
-{
-    int N;			/* number of columns in H */
-    int M;			/* number of rows in H */
-    int K;			/* number of information symbols : K = N-M */
-    int GF;			/* Field order (eg. GF=256) */
-    int logGF;		/* logGF = log2(GF)  ( given GF = 2^q => logGF = q) : logGF is the number of bits forming GF symbols */
-    int **mat;		/* the Parity-check matrix : tableau bidimensionnel contenant les VN (i.e les colonnes) qui participe dans chaque contrainte
-					   de parit�  (i.e les lignes) */
-    int **matValue;		/* Parity-check matrix non-binary coefficients : contient les coefficient GF(q) pour chaque ligne */
-    int *rowDegree;		/* rowDegree[i] = the i^th check node degree */
-    int *columnDegree; 	/* columnDegree[j] = the j^th variable node degree */
-     int nbBranch;		/* number of edges in the Tanner graph */
-    float rate; 		/* Code rate */
-    int **matUT;		/* Upper Triangular form of the parity-check matrix after Gaussian elimination. matUT is used for encoding*/
-    int *Perm;		/* Permutation used for Gaussian Elimination  */
+/*!
+ * \struct code_t
+ * \brief LDPC code parameters with sparse matrix representation
+ * 
+ * This structure contains all necessary parameters for a given LDPC code.
+ * These parameters are usually loaded from a text file that holds the 
+ * parity-check matrix.
+ */
+typedef struct {
+    int N;             // Number of columns in H
+    int M;             // Number of rows in H
+    int K;             // Number of information symbols: K = N - M
+    int GF;            // Field order (e.g., GF=64 or GF=256)
+    int logGF;         // logGF = log2(GF), i.e., the number of bits in each symbol
+    int **mat;         // Parity-check matrix: 2D array listing VNs (columns) involved in each check node (row)
+    int **matValue;    // Non-binary coefficients of the parity-check matrix (GF(q) values per constraint)
+    int *rowDegree;    // Degree of each check node (row)
+    int *columnDegree; // Degree of each variable node (column)
+    int nbBranch;      // Number of edges in the Tanner graph
+    float rate;        // Code rate
+    int **matUT;       // Upper Triangular form used for encoding (after Gaussian elimination)
+    int *Perm;         // Permutation array used in Gaussian elimination
 } code_t;
 
-
 /*!
-* \struct table_t
-* \brief Computation tables in GF(q)
-*/
-typedef struct
-{
-    int **BINGF;		/* Mapping symbol GFq */
-    int **ADDGF;		/* Addition table in GFq */
-    int **MULGF;		/* Multiplication table in GFq */
-    int **DIVGF;		/* Division table in GFq */
-    int *DECGF;         /*Mapping symbol GFq -> binary converted to decimal */
-    int *GFDEC;         /*Mapping decimal to GF symbol */
-    int **MULDEC;       /* Multiplication in decimal */
-    int **DIVDEC;       /* Division in decimal */
+ * \struct table_t
+ * \brief Lookup tables for arithmetic in GF(q)
+ */
+typedef struct {
+    int **BINGF;    // Binary representation of GF(q) symbols
+    int **ADDGF;    // Addition table for GF(q)
+    int **MULGF;    // Multiplication table for GF(q)
+    int **DIVGF;    // Division table for GF(q)
+    int *DECGF;     // Binary-to-decimal mapping of GF(q) symbols
+    int *GFDEC;     // Decimal-to-GF(q) symbol mapping
+    int **MULDEC;   // Multiplication in decimal domain
+    int **DIVDEC;   // Division in decimal domain
 } table_t;
 
-/** *************************************************************************/
-/******************************** EMS decoder********************************/
-/*** Structure for the messages on the edges on decoding graph intrinsic_LLR ***/
-/****************************************************************************/
-typedef float softdata_t ; 
+/**********************************************************/
+/****************** EMS Decoder Parameters ****************/
+/**********************************************************/
 
+typedef float softdata_t;
 
 /*!
-* \struct decoder_t
-* \brief decoder parameter and values
-*/
-typedef struct
-{
+ * \struct decoder_t
+ * \brief Contains all parameters and data for EMS decoding
+ */
+typedef struct {
     int N;
-    int n_cv; /* only the n_cv most reliable GF are transmitted from Check Node to Variable Node  */
-    int n_vc; /* only the n_vc most reliable GF are transmitted from Check Node to Variable Node  */
-    int nbBranch; /* nombre de branches dans le graphe de Tanner */
-    softdata_t 	**CtoV;		/* An array to store the nbMax largest Check_to_Variable reliabilities for all edges on the graph
-							CtoV Array size = (nbBranch x nbMax) */
-    softdata_t 	**VtoC;		/* An array to store the nbMax largest Variable to Check reliabilities for all edges on the graph VtoC Array size = (nbBranch x nbMax) */
-    softdata_t 	**intrinsic_LLR;	   /* An array to store intrinsic Log intrinsic_LLR Ratios received from channel. Each variable node has GF intrinsic
-                                      LLRs. So, the size of intrinsic_LLR is (N x GF) where N is the number of VNs and GF is the order of the Galois
-                                      field. The values are sorted in decreasing way */
-    int 		**intrinsic_GF; /*  Galois field symbols associated to the LLRs values in 'intrinsic_LLR'
-										Same size as for 'intrinsic_LLR' */
-    softdata_t 	**APP;		/* Array to store A Posteriori Probability used to make hard decision on symbol value
-						       Same size as for 'intrinsic_LLR'*/
-    softdata_t      **M_VtoC_LLR; //LLR inputs to one Check node processor.
-    int             **M_VtoC_GF; //GF index corresponding to M_VtoC_LLR.
-    softdata_t      **M_CtoV_LLR ; //LLR output from one Check node processor.
-    int             **M_CtoV_GF; //GF index corresponding to M_VtoC_LLR.
+    int n_cv;          // Top-n_cv most reliable symbols passed from Check Node to Variable Node
+    int n_vc;          // Top-n_vc most reliable symbols passed from Variable Node to Check Node
+    int nbBranch;      // Number of edges in the Tanner graph
+    softdata_t **CtoV; // LLRs from Check to Variable nodes (size: nbBranch × nbMax)
+    softdata_t **VtoC; // LLRs from Variable to Check nodes (size: nbBranch × nbMax)
+    softdata_t **intrinsic_LLR; // Channel LLRs (size: N × GF)
+    int **intrinsic_GF;         // GF symbols associated with intrinsic LLRs (same size)
+    softdata_t **APP;           // A Posteriori Probabilities (same size as intrinsic_LLR)
+    softdata_t **M_VtoC_LLR;    // LLR inputs to Check node processor
+    int **M_VtoC_GF;            // GF indices corresponding to M_VtoC_LLR
+    softdata_t **M_CtoV_LLR;    // LLR outputs from Check node processor
+    int **M_CtoV_GF;            // GF indices corresponding to M_CtoV_LLR
 } decoder_t;
 
-
 /*!
- *
- * \brief Binary image of the field GF(64)
- * Primitive polynomial used P(x)=X^6+X+1 (GF(64))
+ * \brief Binary image of the GF(64) field
+ * Primitive polynomial: P(x) = x^6 + x + 1
  */
 static const int BinGF_64[64][6]=
 {
